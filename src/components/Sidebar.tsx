@@ -47,7 +47,7 @@ export default function Sidebar({
           <span>Keys stay on your device</span>
         </div>
         <div className="version">
-          WISPR TYPE <span>0.1.0</span>
+          WISPR TYPE <span>{__APP_VERSION__}</span>
         </div>
       </div>
     </aside>

@@ -1,6 +1,11 @@
 import { defineConfig } from "vite";
+import { readFileSync } from "node:fs";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+
+const packageVersion = JSON.parse(
+  readFileSync(new URL("./package.json", import.meta.url), "utf8"),
+).version as string;
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
@@ -14,6 +19,9 @@ export default defineConfig({
     },
   },
   envPrefix: ["VITE_"],
+  define: {
+    __APP_VERSION__: JSON.stringify(packageVersion),
+  },
   build: {
     target: ["es2022", "chrome118", "safari13"],
     rolldownOptions: {
