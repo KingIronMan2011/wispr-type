@@ -5,7 +5,13 @@ import tailwindcss from "@tailwindcss/vite";
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   clearScreen: false,
-  server: { port: 1420, strictPort: true, host: "127.0.0.1" },
+  server: {
+    port: 1420,
+    strictPort: true,
+    host: "127.0.0.1",
+  },
   envPrefix: ["VITE_"],
-  build: { target: ["es2022", "chrome118", "safari13"] },
+  build: {
+    target: ["es2022", "chrome118", "safari13"],
+  },
 });
