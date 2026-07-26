@@ -8,9 +8,12 @@ export type Settings = {
   keepRunningInTray: boolean;
   launchAtLogin: boolean;
   startInTray: boolean;
-  historyRetention: "15" | "30" | "never";
+  historyRetention: "15" | "30" | "100" | "500" | "never";
   notificationsEnabled: boolean;
   completedOnboarding: boolean;
+  voiceCommandsEnabled: boolean;
+  textMode: "literal" | "polished";
+  personalVocabulary: string;
 };
 
 export type Transcript = {
@@ -49,6 +52,9 @@ export const fallbackSettings: Settings = {
   historyRetention: "15",
   notificationsEnabled: true,
   completedOnboarding: false,
+  voiceCommandsEnabled: false,
+  textMode: "literal",
+  personalVocabulary: "",
 };
 
 export function displayHotkey(hotkey: string) {

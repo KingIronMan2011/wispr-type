@@ -23,6 +23,12 @@ pub(crate) struct AppSettings {
     #[serde(default = "default_notifications_enabled")]
     pub(crate) notifications_enabled: bool,
     pub(crate) completed_onboarding: bool,
+    #[serde(default)]
+    pub(crate) voice_commands_enabled: bool,
+    #[serde(default = "default_text_mode")]
+    pub(crate) text_mode: String,
+    #[serde(default)]
+    pub(crate) personal_vocabulary: String,
 }
 
 fn default_history_retention() -> String {
@@ -30,6 +36,9 @@ fn default_history_retention() -> String {
 }
 fn default_notifications_enabled() -> bool {
     true
+}
+fn default_text_mode() -> String {
+    "literal".into()
 }
 
 impl Default for AppSettings {
@@ -47,6 +56,9 @@ impl Default for AppSettings {
             history_retention: default_history_retention(),
             notifications_enabled: true,
             completed_onboarding: false,
+            voice_commands_enabled: false,
+            text_mode: "literal".into(),
+            personal_vocabulary: String::new(),
         }
     }
 }
@@ -74,4 +86,5 @@ pub(crate) struct AppState {
     pub(crate) recording: Mutex<Option<NativeRecording>>,
     pub(crate) recording_level: Arc<AtomicU32>,
     pub(crate) recording_error: Arc<Mutex<Option<String>>>,
+    pub(crate) last_failed_audio: Mutex<Option<Vec<u8>>>,
 }

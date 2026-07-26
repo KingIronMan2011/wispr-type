@@ -365,5 +365,32 @@ pub(crate) async fn stop_native_recording(
     let output_action = output_action
         .filter(|action| matches!(action.as_str(), "paste" | "copy"))
         .unwrap_or_else(|| load_settings(&state).output_action);
-    transcribe_audio(app, &state, audio, "audio/wav", &output_action).await
+    let result = transcribe_audio(app, &state, audio.clone(), "audio/wav", &output_action).await;
+    if let Ok(mut failed_audio) = state.last_failed_audio.lock() {
+        *failed_audio = result.as_ref().err().map(|_| audio);
+    }
+    result
+}
+
+pub(crate) async fn retry_last_transcription(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    output_action: Option<String>,
+) -> Result<Transcript, String> {
+    let audio = state
+        .last_failed_audio
+        .lock()
+        .map_err(|_| "Retry is unavailable".to_string())?
+        .clone()
+        .ok_or_else(|| "There is no failed dictation to retry.".to_string())?;
+    let output_action = output_action
+        .filter(|action| matches!(action.as_str(), "paste" | "copy"))
+        .unwrap_or_else(|| load_settings(&state).output_action);
+    let result = transcribe_audio(app, &state, audio, "audio/wav", &output_action).await;
+    if result.is_ok() {
+        if let Ok(mut failed_audio) = state.last_failed_audio.lock() {
+            *failed_audio = None;
+        }
+    }
+    result
 }

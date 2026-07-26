@@ -25,11 +25,17 @@ type Props = {
   transcribing: boolean;
   inputLevel: number;
   message: string;
+  canRetry: boolean;
+  isRetrying: boolean;
+  isCheckingMicrophone: boolean;
+  microphoneCheckResult: string | null;
   capturingHotkey: boolean;
   microphones: { value: string; label: string }[];
   onPersist: (settings: Settings) => Promise<boolean>;
   onCaptureHotkey: () => void;
   onRefreshMicrophones: () => void;
+  onRunMicrophoneCheck: () => void;
+  onRetry: () => void;
   apiKey: string;
   onApiKeyChange: (key: string) => void;
   showApiKey: boolean;
@@ -43,6 +49,7 @@ type Props = {
   onTestKey: () => void;
   onRemoveKey: () => void;
   onOpenGroqKeys: () => void;
+  onOpenPrivacyInfo: () => void;
   availableUpdate: Update | null;
   isInstallingUpdate: boolean;
   onInstallUpdate: () => void;
@@ -57,11 +64,17 @@ export default function SettingsContent({
   transcribing,
   inputLevel,
   message,
+  canRetry,
+  isRetrying,
+  isCheckingMicrophone,
+  microphoneCheckResult,
   capturingHotkey,
   microphones,
   onPersist,
   onCaptureHotkey,
   onRefreshMicrophones,
+  onRunMicrophoneCheck,
+  onRetry,
   apiKey,
   onApiKeyChange,
   showApiKey,
@@ -75,6 +88,7 @@ export default function SettingsContent({
   onTestKey,
   onRemoveKey,
   onOpenGroqKeys,
+  onOpenPrivacyInfo,
   availableUpdate,
   isInstallingUpdate,
   onInstallUpdate,
@@ -151,6 +165,15 @@ export default function SettingsContent({
       <p className={`notice ${recording || transcribing ? "active" : ""}`}>
         {transcribing && <LoaderCircle size={14} className="spin" />}
         {message}
+        {canRetry && (
+          <button
+            className="notice-retry"
+            onClick={onRetry}
+            disabled={isRetrying || recording || transcribing}
+          >
+            {isRetrying ? "Retrying…" : "Retry"}
+          </button>
+        )}
       </p>
       <div className="settings-grid">
         <section className="panel shortcut-panel">
@@ -171,6 +194,19 @@ export default function SettingsContent({
                 ? "Press shortcut…"
                 : displayHotkey(settings.hotkey)}
             </button>
+          </div>
+          <div className="setting-row">
+            <div>
+              <strong>Dictation commands</strong>
+              <p>Say “new paragraph”, “comma”, or “Punkt” while dictating.</p>
+            </div>
+            <Toggle
+              label="Enable dictation commands"
+              checked={settings.voiceCommandsEnabled}
+              onChange={(voiceCommandsEnabled) =>
+                persist({ ...settings, voiceCommandsEnabled })
+              }
+            />
           </div>
           <div className="setting-row">
             <div>
@@ -214,6 +250,22 @@ export default function SettingsContent({
               onChange={(microphone) => persist({ ...settings, microphone })}
               options={microphones}
             />
+          </div>
+          <div className="setting-row microphone-check-row">
+            <div>
+              <strong>Microphone check</strong>
+              <p>
+                {microphoneCheckResult ??
+                  "Listen for two seconds without sending audio to Groq."}
+              </p>
+            </div>
+            <button
+              className="panel-action test-microphone"
+              onClick={onRunMicrophoneCheck}
+              disabled={isCheckingMicrophone || recording || transcribing}
+            >
+              {isCheckingMicrophone ? "Listening…" : "Test microphone"}
+            </button>
           </div>
           <div className="setting-row">
             <div>
@@ -277,6 +329,50 @@ export default function SettingsContent({
                 Copy
               </button>
             </div>
+          </div>
+          <div className="setting-row">
+            <div>
+              <strong>Text mode</strong>
+              <p>
+                Literal preserves the transcript; polished cleans spacing and
+                casing.
+              </p>
+            </div>
+            <div className="segmented">
+              <button
+                className={settings.textMode === "literal" ? "selected" : ""}
+                onClick={() => persist({ ...settings, textMode: "literal" })}
+              >
+                Literal
+              </button>
+              <button
+                className={settings.textMode === "polished" ? "selected" : ""}
+                onClick={() => persist({ ...settings, textMode: "polished" })}
+              >
+                Polished
+              </button>
+            </div>
+          </div>
+          <div className="vocabulary-row">
+            <div>
+              <strong>Personal dictionary</strong>
+              <p>
+                Add names, product terms, or spellings to guide transcription.
+              </p>
+            </div>
+            <textarea
+              key={settings.personalVocabulary}
+              className="vocabulary-input"
+              defaultValue={settings.personalVocabulary}
+              maxLength={650}
+              placeholder="e.g. Wispr Type, Groq, Julia, TypeScript"
+              aria-label="Personal dictionary"
+              onBlur={(event) => {
+                const personalVocabulary = event.target.value;
+                if (personalVocabulary !== settings.personalVocabulary)
+                  persist({ ...settings, personalVocabulary });
+              }}
+            />
           </div>
         </section>
         <section className="panel security-panel">
@@ -476,17 +572,38 @@ export default function SettingsContent({
               options={[
                 { value: "15", label: "Last 15" },
                 { value: "30", label: "Last 30" },
+                { value: "100", label: "Last 100" },
+                { value: "500", label: "Last 500" },
                 { value: "never", label: "Don’t save" },
               ]}
             />
           </div>
           <div className="privacy-notes">
             <span>
-              Audio is processed for transcription and is not stored by Wispr
-              Type.
+              Dictation audio is sent to Groq only to create a transcript. Wispr
+              Type deletes its temporary audio files after processing.
             </span>
-            <span>Your API key stays in Windows Credential Manager.</span>
+            <span>
+              Transcript history stays in a local SQLite database; your API key
+              stays in Windows Credential Manager.
+            </span>
+            <span>
+              Retention by Groq is governed by your Groq project’s data policy.
+              Do not dictate sensitive data without your organisation’s
+              approval.
+            </span>
+            <span>
+              After a failure, audio is held in memory only so you can retry; it
+              clears after success or when the app exits.
+            </span>
           </div>
+          <button
+            className="privacy-link"
+            type="button"
+            onClick={onOpenPrivacyInfo}
+          >
+            Read Groq’s data-processing information <ExternalLink size={13} />
+          </button>
           <div className="privacy-reset">
             <div>
               <strong>Reset local data</strong>

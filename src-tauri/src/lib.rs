@@ -36,6 +36,10 @@ fn start_native_recording(app: AppHandle, state: State<AppState>) -> Result<(), 
     }
 }
 #[tauri::command]
+fn start_microphone_check(state: State<AppState>) -> Result<(), String> {
+    audio::start_native_recording(state)
+}
+#[tauri::command]
 fn get_recording_status(state: State<AppState>) -> audio::RecordingStatus {
     audio::get_recording_status(state)
 }
@@ -65,13 +69,45 @@ async fn stop_native_recording(
         Ok(_) => {
             overlay::show(&app, "success", "Done — sent to your workspace");
             let _ = app::update_tray_activity(&app, "success");
+            log::info!("Dictation completed");
         }
         Err(error) => {
             overlay::show(&app, "error", error);
             let _ = app::update_tray_activity(&app, "error");
+            log::warn!("Dictation failed");
         }
     }
     result
+}
+#[tauri::command]
+async fn retry_last_transcription(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    output_action: Option<String>,
+) -> Result<Transcript, String> {
+    overlay::show(&app, "transcribing", "Retrying your dictation…");
+    let result = audio::retry_last_transcription(app.clone(), state, output_action).await;
+    match &result {
+        Ok(_) => {
+            overlay::show(&app, "success", "Done — sent to your workspace");
+            let _ = app::update_tray_activity(&app, "success");
+            log::info!("Dictation retry completed");
+        }
+        Err(error) => {
+            overlay::show(&app, "error", error);
+            let _ = app::update_tray_activity(&app, "error");
+            log::warn!("Dictation retry failed");
+        }
+    }
+    result
+}
+#[tauri::command]
+fn has_retryable_dictation(state: State<AppState>) -> bool {
+    state
+        .last_failed_audio
+        .lock()
+        .map(|audio| audio.is_some())
+        .unwrap_or(false)
 }
 #[tauri::command]
 fn save_settings(
@@ -148,6 +184,25 @@ fn copy_to_clipboard(app: AppHandle, text: String) -> Result<(), String> {
 
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+        }))
+        .plugin(
+            tauri_plugin_log::Builder::new()
+                .clear_targets()
+                .target(tauri_plugin_log::Target::new(
+                    tauri_plugin_log::TargetKind::LogDir {
+                        file_name: Some("wispr-type".into()),
+                    },
+                ))
+                .level(log::LevelFilter::Info)
+                .max_file_size(1_000_000)
+                .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepOne)
+                .build(),
+        )
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
@@ -174,12 +229,14 @@ pub fn run() {
                 .app_data_dir()
                 .expect("missing app data directory");
             fs::create_dir_all(&state_dir)?;
+            log::info!("Wispr Type started");
             app.manage(AppState {
                 data_dir: state_dir,
                 history_lock: Mutex::new(()),
                 recording: Mutex::new(None),
                 recording_level: Arc::new(AtomicU32::new(0)),
                 recording_error: Arc::new(Mutex::new(None)),
+                last_failed_audio: Mutex::new(None),
             });
             app::set_up_tray(app.handle())?;
             overlay::create(app.handle())?;
@@ -223,9 +280,12 @@ pub fn run() {
             get_settings,
             get_microphones,
             start_native_recording,
+            start_microphone_check,
             get_recording_status,
             cancel_native_recording,
             stop_native_recording,
+            retry_last_transcription,
+            has_retryable_dictation,
             save_settings,
             set_global_shortcut,
             has_api_key,

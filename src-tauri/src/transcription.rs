@@ -1,8 +1,7 @@
 use crate::{
     models::{AppState, GroqResponse, Transcript},
     storage::{
-        history_limit, history_path, load_history, load_settings, secure_entry, sort_history,
-        write_json,
+        history_limit, load_history, load_settings, save_history, secure_entry, sort_history,
     },
 };
 use chrono::Utc;
@@ -10,6 +9,65 @@ use enigo::{Direction, Enigo, Key, Keyboard, Settings as EnigoSettings};
 use reqwest::multipart::{Form, Part};
 use tauri::AppHandle;
 use tauri_plugin_clipboard_manager::ClipboardExt;
+
+fn apply_voice_commands(text: String) -> String {
+    let mut text = text;
+    for (spoken, replacement) in [
+        ("new paragraph", "\n\n"),
+        ("New paragraph", "\n\n"),
+        ("new line", "\n"),
+        ("New line", "\n"),
+        ("comma", ","),
+        ("Comma", ","),
+        ("period", "."),
+        ("Period", "."),
+        ("question mark", "?"),
+        ("Question mark", "?"),
+        ("exclamation mark", "!"),
+        ("Exclamation mark", "!"),
+        ("neuer Absatz", "\n\n"),
+        ("Neuer Absatz", "\n\n"),
+        ("neue Zeile", "\n"),
+        ("Neue Zeile", "\n"),
+        ("Komma", ","),
+        ("komma", ","),
+        ("Punkt", "."),
+        ("punkt", "."),
+        ("Fragezeichen", "?"),
+        ("fragezeichen", "?"),
+        ("Ausrufezeichen", "!"),
+        ("ausrufezeichen", "!"),
+    ] {
+        text = text.replace(spoken, replacement);
+    }
+    text.replace(" ,", ",")
+        .replace(" .", ".")
+        .replace(" ?", "?")
+        .replace(" !", "!")
+        .replace(" \n", "\n")
+        .replace("\n ", "\n")
+}
+
+fn polish_text(text: String) -> String {
+    let mut polished = text
+        .lines()
+        .map(|line| {
+            line.split_whitespace()
+                .collect::<Vec<_>>()
+                .join(" ")
+                .replace(" ,", ",")
+                .replace(" .", ".")
+                .replace(" ?", "?")
+                .replace(" !", "!")
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    if let Some(first) = polished.chars().next() {
+        let replacement = first.to_uppercase().collect::<String>();
+        polished.replace_range(0..first.len_utf8(), &replacement);
+    }
+    polished
+}
 
 fn paste_text(app: &AppHandle, text: &str, should_paste: bool) -> Result<(), String> {
     app.clipboard()
@@ -58,6 +116,14 @@ pub(crate) async fn transcribe_audio(
         .part("file", part)
         .text("model", settings.model.clone())
         .text("response_format", "verbose_json");
+    if !settings.personal_vocabulary.trim().is_empty() {
+        let vocabulary = settings
+            .personal_vocabulary
+            .chars()
+            .take(650)
+            .collect::<String>();
+        form = form.text("prompt", format!("Preferred spellings: {vocabulary}"));
+    }
     if settings.language != "auto" {
         form = form.text("language", settings.language.clone());
     }
@@ -67,15 +133,38 @@ pub(crate) async fn transcribe_audio(
         .multipart(form)
         .send()
         .await
-        .map_err(|err| format!("Groq couldn’t be reached: {err}"))?;
+        .map_err(|err| {
+            if err.is_timeout() {
+                "Groq did not respond in time. Check your connection and retry.".to_string()
+            } else {
+                "Couldn’t reach Groq. Check your internet connection or firewall and retry."
+                    .to_string()
+            }
+        })?;
     let status = response.status();
-    let body = response.text().await.map_err(|err| err.to_string())?;
+    let body = response.text().await.map_err(|_| {
+        "Groq sent a response that Wispr Type couldn’t read. Try again.".to_string()
+    })?;
     if !status.is_success() {
-        return Err(format!("Groq returned {status}: {body}"));
+        let message = match status.as_u16() {
+            401 => "Groq rejected your API key. Replace it in Settings and try again.",
+            403 => "Your Groq project does not have permission to transcribe audio.",
+            413 => "That dictation is too large to send. Try a shorter recording.",
+            429 => "Groq is rate-limiting this project. Your audio is ready to retry shortly.",
+            500..=599 => "Groq is temporarily unavailable. Your audio is ready to retry.",
+            _ => "Groq couldn’t transcribe this dictation. Your audio is ready to retry.",
+        };
+        return Err(message.into());
     }
     let result: GroqResponse = serde_json::from_str(&body)
         .map_err(|_| "Groq returned an unexpected transcription response.".to_string())?;
-    let text = result.text.trim().to_string();
+    let mut text = result.text.trim().to_string();
+    if settings.voice_commands_enabled {
+        text = apply_voice_commands(text);
+    }
+    if settings.text_mode == "polished" {
+        text = polish_text(text);
+    }
     if text.is_empty() {
         return Err("No speech was detected.".into());
     }
@@ -99,6 +188,27 @@ pub(crate) async fn transcribe_audio(
     history.insert(0, item.clone());
     sort_history(&mut history);
     history.truncate(limit);
-    write_json(history_path(state), &history)?;
+    save_history(state, &history)?;
     Ok(item)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{apply_voice_commands, polish_text};
+
+    #[test]
+    fn applies_english_and_german_dictation_commands() {
+        assert_eq!(
+            apply_voice_commands("Hello comma world new paragraph Neuer Absatz Ende Punkt".into()),
+            "Hello, world\n\n\n\nEnde."
+        );
+    }
+
+    #[test]
+    fn polished_mode_preserves_paragraphs() {
+        assert_eq!(
+            polish_text("hello ,  world\n\nnext line !".into()),
+            "Hello, world\n\nnext line!"
+        );
+    }
 }

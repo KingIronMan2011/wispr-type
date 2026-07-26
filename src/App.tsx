@@ -69,6 +69,12 @@ export default function App() {
   const [transcribing, setTranscribing] = useState(false);
   const [inputLevel, setInputLevel] = useState(0);
   const [message, setMessage] = useState("Ready when you are");
+  const [canRetry, setCanRetry] = useState(false);
+  const [isRetrying, setIsRetrying] = useState(false);
+  const [isCheckingMicrophone, setIsCheckingMicrophone] = useState(false);
+  const [microphoneCheckResult, setMicrophoneCheckResult] = useState<
+    string | null
+  >(null);
   const [bootstrapped, setBootstrapped] = useState(false);
   const recordingRef = useRef(false);
   const settingsRef = useRef<Settings>(fallbackSettings);
@@ -176,6 +182,42 @@ export default function App() {
     );
   }, []);
 
+  const handleTranscriptSuccess = useCallback((item: Transcript) => {
+    setCanRetry(false);
+    void invoke<Transcript[]>("get_history")
+      .then(setHistory)
+      .catch(() => {
+        if (settingsRef.current.historyRetention === "never") setHistory([]);
+        else
+          setHistory((items) =>
+            [item, ...items].slice(
+              0,
+              Number(settingsRef.current.historyRetention),
+            ),
+          );
+      });
+    setMessage(
+      settingsRef.current.outputAction === "paste"
+        ? "Pasted into your active app"
+        : "Copied to clipboard",
+    );
+    void (async () => {
+      if (!settingsRef.current.notificationsEnabled) return;
+      try {
+        let granted = await isPermissionGranted();
+        if (!granted) granted = (await requestPermission()) === "granted";
+        if (granted) {
+          sendNotification({
+            title: "Wispr Type",
+            body: "Dictation is ready.",
+          });
+        }
+      } catch {
+        // Notification permissions must never interrupt dictation.
+      }
+    })();
+  }, []);
+
   const stopRecording = useCallback(() => {
     if (!recordingRef.current) return;
     recordingRef.current = false;
@@ -186,53 +228,44 @@ export default function App() {
     void invoke<Transcript>("stop_native_recording", {
       outputAction: settingsRef.current.outputAction,
     })
-      .then((item) => {
-        void invoke<Transcript[]>("get_history")
-          .then(setHistory)
-          .catch(() => {
-            if (settingsRef.current.historyRetention === "never")
-              setHistory([]);
-            else
-              setHistory((items) =>
-                [item, ...items].slice(
-                  0,
-                  Number(settingsRef.current.historyRetention),
-                ),
-              );
-          });
-        setMessage(
-          settingsRef.current.outputAction === "paste"
-            ? "Pasted into your active app"
-            : "Copied to clipboard",
-        );
-        void (async () => {
-          if (!settingsRef.current.notificationsEnabled) return;
-          try {
-            let granted = await isPermissionGranted();
-            if (!granted) granted = (await requestPermission()) === "granted";
-            if (granted) {
-              sendNotification({
-                title: "Wispr Type",
-                body: "Dictation is ready.",
-              });
-            }
-          } catch {
-            // Notification permissions must never interrupt dictation.
-          }
-        })();
-      })
-      .catch((error) =>
+      .then(handleTranscriptSuccess)
+      .catch((error) => {
         setMessage(
           typeof error === "string"
             ? error
             : "Transcription failed. Please try again.",
+        );
+        void invoke<boolean>("has_retryable_dictation")
+          .then(setCanRetry)
+          .catch(() => setCanRetry(false));
+      })
+      .finally(() => setTranscribing(false));
+  }, [handleTranscriptSuccess]);
+
+  const retryLastTranscription = useCallback(() => {
+    if (isRetrying || recordingRef.current || transcribing) return;
+    setIsRetrying(true);
+    setTranscribing(true);
+    setMessage("Retrying your dictation…");
+    void invoke<Transcript>("retry_last_transcription", {
+      outputAction: settingsRef.current.outputAction,
+    })
+      .then(handleTranscriptSuccess)
+      .catch((error) =>
+        setMessage(
+          typeof error === "string"
+            ? error
+            : "Retry failed. Check your connection and try again.",
         ),
       )
-      .finally(() => setTranscribing(false));
-  }, []);
+      .finally(() => {
+        setIsRetrying(false);
+        setTranscribing(false);
+      });
+  }, [handleTranscriptSuccess, isRetrying, transcribing]);
 
   const startRecording = useCallback(async () => {
-    if (recordingRef.current || transcribing) return;
+    if (recordingRef.current || transcribing || isCheckingMicrophone) return;
     if (!hasApiKey) {
       setMessage("Add your Groq API key before dictating");
       return;
@@ -248,7 +281,43 @@ export default function App() {
         typeof error === "string" ? error : "Couldn’t start the microphone",
       );
     }
-  }, [hasApiKey, transcribing]);
+  }, [hasApiKey, isCheckingMicrophone, transcribing]);
+
+  const runMicrophoneCheck = useCallback(async () => {
+    if (recordingRef.current || transcribing || isCheckingMicrophone) return;
+    setIsCheckingMicrophone(true);
+    setMicrophoneCheckResult(null);
+    setMessage("Listening to your microphone for two seconds…");
+    let highestLevel = 0;
+    try {
+      await invoke("start_microphone_check");
+      for (let index = 0; index < 20; index += 1) {
+        await new Promise<void>((resolve) => window.setTimeout(resolve, 100));
+        const status = await invoke<RecordingStatus>("get_recording_status");
+        if (status.error) throw new Error(status.error);
+        highestLevel = Math.max(highestLevel, status.level);
+      }
+      await invoke("cancel_native_recording");
+      const result =
+        highestLevel >= 20
+          ? "Microphone detected your voice. It is ready to dictate."
+          : "No speech level was detected. Check the selected microphone and Windows privacy settings.";
+      setMicrophoneCheckResult(result);
+      setMessage(result);
+    } catch (error) {
+      await invoke("cancel_native_recording").catch(() => undefined);
+      const result =
+        typeof error === "string"
+          ? error
+          : error instanceof Error
+            ? error.message
+            : "Couldn’t test the microphone.";
+      setMicrophoneCheckResult(result);
+      setMessage(result);
+    } finally {
+      setIsCheckingMicrophone(false);
+    }
+  }, [isCheckingMicrophone, transcribing]);
 
   useEffect(() => {
     const unlisten = listen<string>("wispr-shortcut", (event) => {
@@ -525,6 +594,10 @@ export default function App() {
             transcribing={transcribing}
             inputLevel={inputLevel}
             message={message}
+            canRetry={canRetry}
+            isRetrying={isRetrying}
+            isCheckingMicrophone={isCheckingMicrophone}
+            microphoneCheckResult={microphoneCheckResult}
             capturingHotkey={capturingHotkey}
             microphones={microphones}
             onPersist={persist}
@@ -535,6 +608,8 @@ export default function App() {
               );
             }}
             onRefreshMicrophones={() => void loadMicrophones()}
+            onRunMicrophoneCheck={() => void runMicrophoneCheck()}
+            onRetry={retryLastTranscription}
             apiKey={apiKey}
             onApiKeyChange={(key) => {
               setApiKey(key);
@@ -557,6 +632,14 @@ export default function App() {
                 setMessage(
                   "Couldn’t open your browser. Visit console.groq.com/keys",
                 ),
+              )
+            }
+            onOpenPrivacyInfo={() =>
+              void openUrl("https://console.groq.com/docs/your-data").catch(
+                () =>
+                  setMessage(
+                    "Couldn’t open your browser. Visit console.groq.com/docs/your-data",
+                  ),
               )
             }
             availableUpdate={availableUpdate}

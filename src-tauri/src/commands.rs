@@ -2,8 +2,8 @@ use crate::{
     app::update_tray_activity,
     models::{AppSettings, AppState, Transcript},
     storage::{
-        history_limit, history_path, load_history, load_settings, secure_entry, settings_path,
-        sort_history, write_json,
+        clear_history_db, history_db_path, history_limit, load_history, load_settings,
+        save_history, secure_entry, settings_path, sort_history, write_json,
     },
 };
 use serde::Serialize;
@@ -41,9 +41,21 @@ pub(crate) fn save_settings(
     let existing = load_settings(&state);
     let mut settings = settings;
     settings.hotkey = normalized_hotkey(&settings.hotkey);
-    if !matches!(settings.history_retention.as_str(), "15" | "30" | "never") {
+    if !matches!(
+        settings.history_retention.as_str(),
+        "15" | "30" | "100" | "500" | "never"
+    ) {
         settings.history_retention = "15".into();
     }
+    if !matches!(settings.text_mode.as_str(), "literal" | "polished") {
+        settings.text_mode = "literal".into();
+    }
+    settings.personal_vocabulary = settings
+        .personal_vocabulary
+        .trim()
+        .chars()
+        .take(650)
+        .collect();
     if settings.hotkey != existing.hotkey {
         replace_global_shortcut(&app, &settings.hotkey, &existing.hotkey)?;
     }
@@ -72,7 +84,8 @@ pub(crate) fn save_settings(
     };
     sort_history(&mut history);
     history.truncate(limit);
-    write_json(history_path(&state), &history)?;
+    save_history(&state, &history)?;
+    log::info!("Settings saved");
     Ok(settings)
 }
 
@@ -226,7 +239,7 @@ pub(crate) fn clear_history(state: State<AppState>) -> Result<(), String> {
         .history_lock
         .lock()
         .map_err(|_| "History is unavailable".to_string())?;
-    write_json(history_path(&state), &Vec::<Transcript>::new())
+    clear_history_db(&state)
 }
 
 pub(crate) fn update_history_item(
@@ -249,7 +262,7 @@ pub(crate) fn update_history_item(
         .ok_or_else(|| "That transcript is no longer available.".to_string())?;
     item.text = text;
     let updated = item.clone();
-    write_json(history_path(&state), &history)?;
+    save_history(&state, &history)?;
     Ok(updated)
 }
 
@@ -269,7 +282,7 @@ pub(crate) fn set_history_pinned(
         .ok_or_else(|| "That transcript is no longer available.".to_string())?;
     item.pinned = pinned;
     sort_history(&mut history);
-    write_json(history_path(&state), &history)?;
+    save_history(&state, &history)?;
     Ok(history)
 }
 
@@ -287,7 +300,8 @@ pub(crate) fn reset_local_data(app: AppHandle, state: State<AppState>) -> Result
     let _ =
         secure_entry().and_then(|entry| entry.delete_credential().map_err(|err| err.to_string()));
     let _ = fs::remove_file(settings_path(&state));
-    let _ = fs::remove_file(history_path(&state));
+    let _ = fs::remove_file(history_db_path(&state));
+    let _ = fs::remove_file(state.data_dir.join("history.json"));
     if let Ok(entries) = fs::read_dir(&state.data_dir) {
         for entry in entries.flatten() {
             let path = entry.path();

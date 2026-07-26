@@ -18,4 +18,3 @@ src-tauri/icons/**/*.icns
 .env*
 .idea/
 .vscode/
-
