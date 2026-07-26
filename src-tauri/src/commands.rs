@@ -59,16 +59,17 @@ pub(crate) fn set_global_shortcut(
 
 pub(crate) fn has_api_key() -> bool {
     secure_entry()
-        .and_then(|entry| entry.get_secret().map_err(|err| err.to_string()))
+        .and_then(|entry| entry.get_password().map_err(|err| err.to_string()))
         .is_ok()
 }
 pub(crate) fn save_api_key(api_key: String) -> Result<(), String> {
+    let api_key = api_key.trim();
     if !api_key.starts_with("gsk_") {
         return Err("That doesn't look like a Groq API key.".into());
     }
     secure_entry()?
-        .set_secret(api_key.as_bytes())
-        .map_err(|err| err.to_string())
+        .set_password(api_key)
+        .map_err(|err| format!("Windows Credential Manager could not save the key: {err}"))
 }
 pub(crate) fn delete_api_key() -> Result<(), String> {
     secure_entry()?

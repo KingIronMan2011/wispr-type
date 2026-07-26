@@ -8,6 +8,8 @@ import {
   ChevronDown,
   Copy,
   Cpu,
+  Eye,
+  EyeOff,
   ExternalLink,
   History,
   Keyboard,
@@ -16,6 +18,7 @@ import {
   Mic,
   MonitorUp,
   Settings2,
+  Sparkles,
   ShieldCheck,
   SlidersHorizontal,
   Volume2,
@@ -130,6 +133,7 @@ export default function App() {
   const [settings, setSettings] = useState<Settings>(fallback);
   const [history, setHistory] = useState<Transcript[]>([]);
   const [apiKey, setApiKey] = useState("");
+  const [showApiKey, setShowApiKey] = useState(false);
   const [hasApiKey, setHasApiKey] = useState(false);
   const [capturingHotkey, setCapturingHotkey] = useState(false);
   const [isDeletingKey, setIsDeletingKey] = useState(false);
@@ -300,10 +304,17 @@ export default function App() {
     try {
       await invoke("save_api_key", { apiKey: apiKey.trim() });
       setApiKey("");
+      setShowApiKey(false);
       setHasApiKey(true);
       setMessage("Groq API key saved securely");
-    } catch {
-      setMessage("Couldn’t save the API key");
+    } catch (error) {
+      const detail =
+        typeof error === "string"
+          ? error
+          : error instanceof Error
+            ? error.message
+            : "";
+      setMessage(detail || "Couldn’t save the API key");
     } finally {
       setIsSavingKey(false);
     }
@@ -598,10 +609,19 @@ export default function App() {
               <input
                 value={apiKey}
                 onChange={(event) => setApiKey(event.target.value)}
-                type="password"
+                type={showApiKey ? "text" : "password"}
                 placeholder={hasApiKey ? "••••••••••••••••••••" : "gsk_…"}
                 aria-label="Groq API key"
               />
+              <button
+                type="button"
+                className="reveal-key"
+                onClick={() => setShowApiKey((visible) => !visible)}
+                aria-label={showApiKey ? "Hide API key" : "Show API key"}
+                title={showApiKey ? "Hide API key" : "Show API key"}
+              >
+                {showApiKey ? <EyeOff size={15} /> : <Eye size={15} />}
+              </button>
               <button
                 onClick={() => void saveKey()}
                 disabled={isSavingKey || !apiKey.trim()}

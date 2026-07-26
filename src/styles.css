@@ -486,6 +486,10 @@ h1 {
 .key-input input:focus {
   border-color: #7252ad;
 }
+.key-input input::-ms-reveal,
+.key-input input::-ms-clear {
+  display: none;
+}
 .key-input button {
   border: 1px solid #8b5cf6;
   border-radius: 6px;
@@ -496,6 +500,18 @@ h1 {
   background: #7047bf;
   padding: 0 9px;
   font-size: 10px;
+}
+.key-input button.reveal-key {
+  min-width: 34px;
+  padding: 0;
+  border-color: #3e3e48;
+  background: #25252d;
+  color: #b9b6ca;
+}
+.key-input button.reveal-key:hover {
+  border-color: #8061bd;
+  background: #302b3d;
+  color: #efeaff;
 }
 .key-input button:disabled {
   opacity: 0.45;

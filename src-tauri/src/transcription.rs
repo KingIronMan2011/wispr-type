@@ -43,7 +43,7 @@ pub(crate) async fn transcribe_audio(
         return Err("No audio was captured.".into());
     }
     let api_key = secure_entry()?
-        .get_secret()
+        .get_password()
         .map_err(|_| "Add a Groq API key in Settings first.".to_string())?;
     let settings = load_settings(state);
     let part = Part::bytes(audio)
@@ -59,7 +59,7 @@ pub(crate) async fn transcribe_audio(
     }
     let response = reqwest::Client::new()
         .post("https://api.groq.com/openai/v1/audio/transcriptions")
-        .bearer_auth(String::from_utf8_lossy(&api_key).as_ref())
+        .bearer_auth(api_key)
         .multipart(form)
         .send()
         .await
