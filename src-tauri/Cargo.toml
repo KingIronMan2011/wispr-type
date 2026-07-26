@@ -1,0 +1,30 @@
+[package]
+name = "wispr-type"
+version = "0.1.0"
+description = "Fast, private desktop dictation powered by Groq"
+authors = ["Wispr Type"]
+edition = "2021"
+
+[lib]
+name = "wispr_type_lib"
+crate-type = ["rlib", "cdylib", "staticlib"]
+
+[[bin]]
+name = "wispr-type"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2.5.1", features = [] }
+
+[dependencies]
+tauri = { version = "2.11.1", features = ["tray-icon"] }
+tauri-plugin-autostart = "2.5.1"
+tauri-plugin-clipboard-manager = "2.3.2"
+tauri-plugin-global-shortcut = "2.3.2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+reqwest = { version = "0.12", features = ["json", "multipart", "rustls-tls"] }
+keyring = "4.1.5"
+enigo = "0.6.1"
+chrono = { version = "0.4", features = ["serde"] }
+

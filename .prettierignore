@@ -1,0 +1,17 @@
+# Dependencies and generated builds
+node_modules/
+dist/
+src-tauri/target/
+.vite/
+
+# Lockfiles and generated binary assets
+pnpm-lock.yaml
+src-tauri/icons/**/*.png
+src-tauri/icons/**/*.ico
+src-tauri/icons/**/*.icns
+
+# Local configuration and editor metadata
+.env*
+.idea/
+.vscode/
+
