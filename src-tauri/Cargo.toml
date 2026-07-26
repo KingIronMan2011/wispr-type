@@ -28,3 +28,5 @@ reqwest = { version = "0.12", features = ["json", "multipart", "rustls-tls"] }
 keyring = "4.1.5"
 enigo = "0.6.1"
 chrono = { version = "0.4", features = ["serde"] }
+cpal = "0.15.3"
+hound = "3.5.1"

@@ -1,1 +1,15 @@
-{"default":{"identifier":"default","description":"Default permissions for the Wispr Type desktop window.","local":true,"windows":["main"],"permissions":["core:default","autostart:default","clipboard-manager:default","opener:default","global-shortcut:default"]}}
+{
+  "default": {
+    "identifier": "default",
+    "description": "Default permissions for the Wispr Type desktop window.",
+    "local": true,
+    "windows": ["main"],
+    "permissions": [
+      "core:default",
+      "autostart:default",
+      "clipboard-manager:default",
+      "opener:default",
+      "global-shortcut:default"
+    ]
+  }
+}

@@ -38,7 +38,7 @@ type Transcript = {
   language: string;
 };
 const fallback: Settings = {
-  hotkey: "Ctrl + Shift + Space",
+  hotkey: "Ctrl+Shift+Space",
   inputMode: "hold",
   microphone: "Default microphone",
   model: "whisper-large-v3-turbo",
@@ -47,6 +47,36 @@ const fallback: Settings = {
   keepRunningInTray: true,
   launchAtLogin: false,
 };
+
+function displayHotkey(hotkey: string) {
+  return hotkey
+    .replace(/Key([A-Z])/g, "$1")
+    .replace(/Digit(\d)/g, "$1")
+    .replaceAll("+", " + ");
+}
+
+function hotkeyFromEvent(event: KeyboardEvent) {
+  if (
+    [
+      "ControlLeft",
+      "ControlRight",
+      "ShiftLeft",
+      "ShiftRight",
+      "AltLeft",
+      "AltRight",
+      "MetaLeft",
+      "MetaRight",
+    ].includes(event.code)
+  )
+    return null;
+  const modifiers = [
+    event.ctrlKey && "Ctrl",
+    event.shiftKey && "Shift",
+    event.altKey && "Alt",
+    event.metaKey && "Super",
+  ].filter(Boolean);
+  return modifiers.length ? [...modifiers, event.code].join("+") : null;
+}
 
 function Toggle({
   checked,
@@ -99,6 +129,8 @@ export default function App() {
   const [history, setHistory] = useState<Transcript[]>([]);
   const [apiKey, setApiKey] = useState("");
   const [hasApiKey, setHasApiKey] = useState(false);
+  const [capturingHotkey, setCapturingHotkey] = useState(false);
+  const [isDeletingKey, setIsDeletingKey] = useState(false);
   const [microphones, setMicrophones] = useState<
     { value: string; label: string }[]
   >([{ value: "Default microphone", label: "Default microphone" }]);
@@ -106,9 +138,6 @@ export default function App() {
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const [message, setMessage] = useState("Ready when you are");
-  const recorder = useRef<MediaRecorder | null>(null);
-  const chunks = useRef<Blob[]>([]);
-  const stream = useRef<MediaStream | null>(null);
   const recordingRef = useRef(false);
 
   const refresh = useCallback(async () => {
@@ -126,43 +155,18 @@ export default function App() {
     void refresh();
   }, [refresh]);
 
-  const loadMicrophones = useCallback(async (requestPermission = false) => {
+  const loadMicrophones = useCallback(async () => {
     try {
-      if (requestPermission) {
-        // Windows reveals friendly device labels only after mic permission is granted.
-        const permissionStream = await navigator.mediaDevices.getUserMedia({
-          audio: true,
-        });
-        permissionStream.getTracks().forEach((track) => track.stop());
-      }
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      const inputs = devices
-        .filter((device) => device.kind === "audioinput")
-        .map((device, index) => ({
-          value: device.deviceId,
-          label: device.label || `Microphone ${index + 1}`,
-        }));
-      setMicrophones([
-        { value: "Default microphone", label: "Default microphone" },
-        ...inputs,
-      ]);
+      setMicrophones(
+        await invoke<{ value: string; label: string }[]>("get_microphones"),
+      );
     } catch {
-      setMessage("Allow microphone access to show your input devices");
+      setMessage("Couldn’t read the Windows microphone list");
     }
   }, []);
 
   useEffect(() => {
-    void loadMicrophones(true);
-  }, [loadMicrophones]);
-
-  useEffect(() => {
-    const handleDeviceChange = () => void loadMicrophones();
-    navigator.mediaDevices.addEventListener("devicechange", handleDeviceChange);
-    return () =>
-      navigator.mediaDevices.removeEventListener(
-        "devicechange",
-        handleDeviceChange,
-      );
+    void loadMicrophones();
   }, [loadMicrophones]);
 
   const persist = useCallback(async (next: Settings) => {
@@ -175,9 +179,29 @@ export default function App() {
   }, []);
 
   const stopRecording = useCallback(() => {
-    if (!recorder.current || recorder.current.state === "inactive") return;
-    recorder.current.stop();
-  }, []);
+    if (!recordingRef.current) return;
+    recordingRef.current = false;
+    setRecording(false);
+    setTranscribing(true);
+    setMessage("Transcribing your thought…");
+    void invoke<Transcript>("stop_native_recording")
+      .then((item) => {
+        setHistory((items) => [item, ...items].slice(0, 15));
+        setMessage(
+          settings.outputAction === "paste"
+            ? "Pasted into your active app"
+            : "Copied to clipboard",
+        );
+      })
+      .catch((error) =>
+        setMessage(
+          typeof error === "string"
+            ? error
+            : "Transcription failed. Please try again.",
+        ),
+      )
+      .finally(() => setTranscribing(false));
+  }, [settings.outputAction]);
 
   const startRecording = useCallback(async () => {
     if (recordingRef.current || transcribing) return;
@@ -186,68 +210,16 @@ export default function App() {
       return;
     }
     try {
-      const media = await navigator.mediaDevices.getUserMedia({
-        audio:
-          settings.microphone === "Default microphone"
-            ? true
-            : { deviceId: { exact: settings.microphone } },
-      });
-      void loadMicrophones();
-      stream.current = media;
-      chunks.current = [];
-      const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
-        ? "audio/webm;codecs=opus"
-        : "audio/webm";
-      const nextRecorder = new MediaRecorder(media, { mimeType });
-      recorder.current = nextRecorder;
-      nextRecorder.ondataavailable = ({ data }) => {
-        if (data.size) chunks.current.push(data);
-      };
-      nextRecorder.onstop = async () => {
-        recordingRef.current = false;
-        setRecording(false);
-        stream.current?.getTracks().forEach((track) => track.stop());
-        stream.current = null;
-        const blob = new Blob(chunks.current, { type: mimeType });
-        if (!blob.size) return;
-        setTranscribing(true);
-        setMessage("Transcribing your thought…");
-        try {
-          const bytes = new Uint8Array(await blob.arrayBuffer());
-          const item = await invoke<Transcript>("transcribe_audio", {
-            audio: Array.from(bytes),
-            mimeType: blob.type,
-          });
-          setHistory((items) => [item, ...items].slice(0, 15));
-          setMessage(
-            settings.outputAction === "paste"
-              ? "Pasted into your active app"
-              : "Copied to clipboard",
-          );
-        } catch (error) {
-          setMessage(
-            typeof error === "string"
-              ? error
-              : "Transcription failed. Please try again.",
-          );
-        } finally {
-          setTranscribing(false);
-        }
-      };
-      nextRecorder.start();
+      await invoke("start_native_recording");
       recordingRef.current = true;
       setRecording(true);
       setMessage("Listening… release when you’re done");
-    } catch {
-      setMessage("Microphone access is needed to dictate");
+    } catch (error) {
+      setMessage(
+        typeof error === "string" ? error : "Couldn’t start the microphone",
+      );
     }
-  }, [
-    hasApiKey,
-    loadMicrophones,
-    settings.microphone,
-    settings.outputAction,
-    transcribing,
-  ]);
+  }, [hasApiKey, transcribing]);
 
   useEffect(() => {
     const unlisten = listen<string>("wispr-shortcut", (event) => {
@@ -263,6 +235,45 @@ export default function App() {
       void unlisten.then((fn) => fn());
     };
   }, [settings.inputMode, startRecording, stopRecording]);
+
+  useEffect(() => {
+    const activity = recording
+      ? "recording"
+      : transcribing
+        ? "transcribing"
+        : "ready";
+    void invoke("set_activity_state", { activity });
+  }, [recording, transcribing]);
+
+  useEffect(() => {
+    if (!capturingHotkey) return;
+    const capture = (event: KeyboardEvent) => {
+      if (event.repeat) return;
+      if (event.code === "Escape") {
+        setCapturingHotkey(false);
+        setMessage("Shortcut capture cancelled");
+        return;
+      }
+      const hotkey = hotkeyFromEvent(event);
+      if (!hotkey) return;
+      event.preventDefault();
+      void invoke<Settings>("set_global_shortcut", { hotkey })
+        .then((next) => {
+          setSettings(next);
+          setMessage(`${displayHotkey(next.hotkey)} is now active`);
+        })
+        .catch((error) =>
+          setMessage(
+            typeof error === "string"
+              ? error
+              : "Couldn’t register that shortcut",
+          ),
+        )
+        .finally(() => setCapturingHotkey(false));
+    };
+    window.addEventListener("keydown", capture, true);
+    return () => window.removeEventListener("keydown", capture, true);
+  }, [capturingHotkey]);
 
   const saveKey = async () => {
     if (!apiKey.trim()) return;
@@ -287,6 +298,19 @@ export default function App() {
     }
   };
 
+  const removeApiKey = async () => {
+    setIsDeletingKey(true);
+    try {
+      await invoke("delete_api_key");
+      setHasApiKey(false);
+      setMessage("Groq API key removed from Windows Credential Manager");
+    } catch {
+      setMessage("Couldn’t remove the API key");
+    } finally {
+      setIsDeletingKey(false);
+    }
+  };
+
   return (
     <main className="app-shell">
       <aside className="sidebar">
@@ -297,10 +321,10 @@ export default function App() {
           </span>
         </div>
         <nav>
-          <a className="active">
+          <a className="active" href="#settings">
             <Settings2 size={17} /> Settings
           </a>
-          <a>
+          <a href="#history">
             <History size={17} /> History{" "}
             <span className="nav-count">{history.length}</span>
           </a>
@@ -315,7 +339,7 @@ export default function App() {
           </div>
         </div>
       </aside>
-      <section className="content">
+      <section className="content" id="settings">
         <header>
           <div>
             <p className="eyebrow">WORKSPACE</p>
@@ -337,7 +361,7 @@ export default function App() {
           </div>
           <div className="command-copy">
             <span className="section-kicker">YOUR COMMAND</span>
-            <h2>{settings.hotkey}</h2>
+            <h2>{displayHotkey(settings.hotkey)}</h2>
             <p>
               {recording
                 ? "Release to transcribe"
@@ -372,13 +396,16 @@ export default function App() {
               </div>
               <button
                 className="hotkey"
-                onClick={() =>
+                onClick={() => {
+                  setCapturingHotkey(true);
                   setMessage(
-                    "Shortcut capture is coming next — Ctrl + Shift + Space is active.",
-                  )
-                }
+                    "Press a shortcut with Ctrl, Shift, Alt, or Super. Esc cancels.",
+                  );
+                }}
               >
-                Ctrl <em>+</em> Shift <em>+</em> Space
+                {capturingHotkey
+                  ? "Press shortcut…"
+                  : displayHotkey(settings.hotkey)}
               </button>
             </div>
             <div className="setting-row">
@@ -414,7 +441,7 @@ export default function App() {
               </div>
               <button
                 className="panel-action"
-                onClick={() => void loadMicrophones(true)}
+                onClick={() => void loadMicrophones()}
               >
                 Refresh
               </button>
@@ -540,6 +567,19 @@ export default function App() {
                   "Save key"
                 )}
               </button>
+              {hasApiKey && (
+                <button
+                  className="remove-key"
+                  onClick={() => void removeApiKey()}
+                  disabled={isDeletingKey}
+                >
+                  {isDeletingKey ? (
+                    <LoaderCircle className="spin" size={16} />
+                  ) : (
+                    "Remove"
+                  )}
+                </button>
+              )}
             </div>
             <button
               type="button"
@@ -584,7 +624,7 @@ export default function App() {
             </div>
           </section>
         </div>
-        <section className="history-section">
+        <section className="history-section" id="history">
           <div className="history-heading">
             <div>
               <History size={18} />
@@ -601,7 +641,7 @@ export default function App() {
           </div>
           {history.length ? (
             <div className="history-list">
-              {history.slice(0, 3).map((item) => (
+              {history.map((item) => (
                 <article key={item.id}>
                   <p>{item.text}</p>
                   <span>
@@ -610,7 +650,11 @@ export default function App() {
                   </span>
                   <button
                     onClick={() =>
-                      void navigator.clipboard.writeText(item.text)
+                      void invoke("copy_to_clipboard", {
+                        text: item.text,
+                      }).then(() =>
+                        setMessage("Transcript copied to clipboard"),
+                      )
                     }
                     aria-label="Copy transcript"
                   >

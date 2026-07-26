@@ -481,6 +481,16 @@ h1 {
 .key-input button:disabled {
   opacity: 0.45;
 }
+.key-input button.remove-key {
+  min-width: 0;
+  border-color: #5b3948;
+  background: #2c1d25;
+  color: #e2a3b7;
+}
+.key-input button.remove-key:hover:not(:disabled) {
+  border-color: #9e526d;
+  background: #40212e;
+}
 .inline-link {
   display: inline-flex;
   align-items: center;
