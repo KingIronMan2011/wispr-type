@@ -3,6 +3,12 @@ name: Release Wispr Type
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Existing version tag to publish (for example, v0.1.0)"
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -22,11 +28,16 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - uses: tauri-apps/tauri-action@v0
         env:
+          # Required by tauri-action to create the GitHub Release and upload
+          # its signed installer and latest.json updater feed.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: "Wispr Type ${{ github.ref_name }}"
-          releaseBody: "See the release notes for improvements and fixes."
+          tagName: ${{ inputs.release_tag || github.ref_name }}
+          releaseName: "Wispr Type ${{ inputs.release_tag || github.ref_name }}"
+          releaseBody: "Windows installer and signed in-app updater package."
           releaseDraft: false
           prerelease: false
+          generateReleaseNotes: true
+          updaterJsonPreferNsis: true
