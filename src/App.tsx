@@ -19,10 +19,15 @@ import {
   LockKeyhole,
   Mic,
   MonitorUp,
+  Pencil,
+  Pin,
+  PinOff,
+  Search,
   Settings2,
   Sparkles,
   ShieldCheck,
   SlidersHorizontal,
+  Trash2,
   Volume2,
 } from "lucide-react";
 import logo from "./assets/wispr-type-logo.png";
@@ -37,6 +42,7 @@ type Settings = {
   keepRunningInTray: boolean;
   launchAtLogin: boolean;
   startInTray: boolean;
+  historyRetention: "15" | "30" | "never";
 };
 
 type Transcript = {
@@ -44,6 +50,7 @@ type Transcript = {
   text: string;
   createdAt: string;
   language: string;
+  pinned: boolean;
 };
 type RecordingStatus = {
   level: number;
@@ -67,6 +74,7 @@ const fallback: Settings = {
   keepRunningInTray: true,
   launchAtLogin: false,
   startInTray: false,
+  historyRetention: "15",
 };
 
 function displayHotkey(hotkey: string) {
@@ -240,6 +248,12 @@ export default function App() {
   }
   const [settings, setSettings] = useState<Settings>(fallback);
   const [history, setHistory] = useState<Transcript[]>([]);
+  const [historyQuery, setHistoryQuery] = useState("");
+  const [editingHistoryId, setEditingHistoryId] = useState<string | null>(null);
+  const [editingText, setEditingText] = useState("");
+  const [activeSection, setActiveSection] = useState<"settings" | "history">(
+    "settings",
+  );
   const [apiKey, setApiKey] = useState("");
   const [showApiKey, setShowApiKey] = useState(false);
   const [hasApiKey, setHasApiKey] = useState(false);
@@ -275,6 +289,27 @@ export default function App() {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    const sections = ["settings", "history"]
+      .map((id) => document.getElementById(id))
+      .filter((section): section is HTMLElement => Boolean(section));
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const current = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort(
+            (left, right) => right.intersectionRatio - left.intersectionRatio,
+          )[0];
+        if (current) {
+          setActiveSection(current.target.id as "settings" | "history");
+        }
+      },
+      { rootMargin: "-12% 0px -58% 0px", threshold: [0.05, 0.25, 0.5] },
+    );
+    sections.forEach((section) => observer.observe(section));
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     let disposed = false;
@@ -341,7 +376,16 @@ export default function App() {
       outputAction: settingsRef.current.outputAction,
     })
       .then((item) => {
-        setHistory((items) => [item, ...items].slice(0, 15));
+        void invoke<Transcript[]>("get_history")
+          .then(setHistory)
+          .catch(() => {
+            if (settingsRef.current.historyRetention === "never") {
+              setHistory([]);
+              return;
+            }
+            const limit = Number(settingsRef.current.historyRetention);
+            setHistory((items) => [item, ...items].slice(0, limit));
+          });
         setMessage(
           settingsRef.current.outputAction === "paste"
             ? "Pasted into your active app"
@@ -536,6 +580,93 @@ export default function App() {
     }
   };
 
+  const goToSection = (section: "settings" | "history") => {
+    setActiveSection(section);
+    document.getElementById(section)?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  };
+
+  const copyTranscript = async (item: Transcript) => {
+    try {
+      await invoke("copy_to_clipboard", { text: item.text });
+      setMessage("Transcript copied to clipboard");
+    } catch {
+      setMessage("Couldn’t copy that transcript");
+    }
+  };
+
+  const togglePinned = async (item: Transcript) => {
+    try {
+      const next = await invoke<Transcript[]>("set_history_pinned", {
+        id: item.id,
+        pinned: !item.pinned,
+      });
+      setHistory(next);
+      setMessage(item.pinned ? "Transcript unpinned" : "Transcript pinned");
+    } catch {
+      setMessage("Couldn’t update that transcript");
+    }
+  };
+
+  const saveHistoryEdit = async () => {
+    if (!editingHistoryId || !editingText.trim()) return;
+    try {
+      const updated = await invoke<Transcript>("update_history_item", {
+        id: editingHistoryId,
+        text: editingText,
+      });
+      setHistory((items) =>
+        items.map((item) => (item.id === updated.id ? updated : item)),
+      );
+      setEditingHistoryId(null);
+      setEditingText("");
+      setMessage("Transcript updated");
+    } catch (error) {
+      setMessage(
+        typeof error === "string" ? error : "Couldn’t update that transcript",
+      );
+    }
+  };
+
+  const clearHistory = async () => {
+    if (
+      !window.confirm(
+        "Clear every transcript in History? This cannot be undone.",
+      )
+    ) {
+      return;
+    }
+    try {
+      await invoke("clear_history");
+      setHistory([]);
+      setEditingHistoryId(null);
+      setMessage("Transcript history cleared");
+    } catch {
+      setMessage("Couldn’t clear transcript history");
+    }
+  };
+
+  const resetLocalData = async () => {
+    const confirmed = window.confirm(
+      "Remove your API key, settings, transcript history, and launch-at-sign-in setting from this device? This cannot be undone.",
+    );
+    if (!confirmed) return;
+    try {
+      await invoke("reset_local_data");
+      settingsRef.current = fallback;
+      setSettings(fallback);
+      setHistory([]);
+      setHasApiKey(false);
+      setApiKey("");
+      setKeyTest(null);
+      setMessage("All Wispr Type data was removed from this device");
+    } catch {
+      setMessage("Couldn’t remove all local data");
+    }
+  };
+
   const installUpdate = async () => {
     if (!availableUpdate || isInstallingUpdate) return;
     setIsInstallingUpdate(true);
@@ -549,6 +680,14 @@ export default function App() {
   };
 
   const meterLevel = recording ? Math.max(inputLevel / 1000, 0.05) : 0.28;
+  const filteredHistory = history.filter((item) => {
+    const query = historyQuery.trim().toLocaleLowerCase();
+    return (
+      !query ||
+      item.text.toLocaleLowerCase().includes(query) ||
+      item.language.toLocaleLowerCase().includes(query)
+    );
+  });
 
   return (
     <main className="app-shell">
@@ -560,10 +699,24 @@ export default function App() {
           </span>
         </div>
         <nav>
-          <a className="active" href="#settings">
+          <a
+            className={activeSection === "settings" ? "active" : ""}
+            href="#settings"
+            onClick={(event) => {
+              event.preventDefault();
+              goToSection("settings");
+            }}
+          >
             <Settings2 size={17} /> Settings
           </a>
-          <a href="#history">
+          <a
+            className={activeSection === "history" ? "active" : ""}
+            href="#history"
+            onClick={(event) => {
+              event.preventDefault();
+              goToSection("history");
+            }}
+          >
             <History size={17} /> History{" "}
             <span className="nav-count">{history.length}</span>
           </a>
@@ -578,416 +731,574 @@ export default function App() {
           </div>
         </div>
       </aside>
-      <section className="content" id="settings">
-        <header>
-          <div>
-            <p className="eyebrow">WORKSPACE</p>
-            <h1>Settings</h1>
-            <p className="subtitle">
-              Set up a quieter, faster way to get your thoughts out.
-            </p>
-          </div>
-          <div
-            className={`status ${recording ? "live" : transcribing ? "thinking" : ""}`}
-          >
-            <span className="status-dot" />
-            {recording ? "Listening" : transcribing ? "Thinking" : "Ready"}
-          </div>
-          {availableUpdate && (
-            <button
-              className="update-button"
-              onClick={() => void installUpdate()}
-              disabled={isInstallingUpdate}
+      <section className="content">
+        <div className="settings-section" id="settings">
+          <header>
+            <div>
+              <p className="eyebrow">WORKSPACE</p>
+              <h1>Settings</h1>
+              <p className="subtitle">
+                Set up a quieter, faster way to get your thoughts out.
+              </p>
+            </div>
+            <div
+              className={`status ${recording ? "live" : transcribing ? "thinking" : ""}`}
             >
-              {isInstallingUpdate ? (
-                <LoaderCircle className="spin" size={14} />
-              ) : (
-                <Sparkles size={14} />
-              )}
-              {isInstallingUpdate
-                ? "Updating…"
-                : `Update ${availableUpdate.version}`}
-            </button>
-          )}
-        </header>
-        <section className="command-card">
-          <div className="command-icon">
-            <Mic size={22} />
-          </div>
-          <div className="command-copy">
-            <span className="section-kicker">YOUR COMMAND</span>
-            <h2>{displayHotkey(settings.hotkey)}</h2>
-            <p>
-              {recording
-                ? "Release to transcribe · Esc to cancel"
-                : settings.inputMode === "hold"
-                  ? "Hold anywhere to dictate"
-                  : "Press to start or stop dictation"}
-            </p>
-          </div>
-          <div
-            className={`audio-bars ${recording ? "live" : ""}`}
-            aria-label={
-              recording ? "Live microphone level" : "Microphone level"
-            }
-            role="img"
-          >
-            {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => (
-              <i
-                key={i}
-                style={{
-                  height: `${Math.round(
-                    5 + meterLevel * (11 + ((i * 17) % 31)),
-                  )}px`,
-                }}
-              />
-            ))}
-          </div>
-        </section>
-        <p className={`notice ${recording || transcribing ? "active" : ""}`}>
-          {transcribing && <LoaderCircle size={14} className="spin" />}
-          {message}
-        </p>
-        <div className="settings-grid">
-          <section className="panel shortcut-panel">
-            <div className="panel-heading">
-              <div>
-                <Keyboard size={18} />
-                <h3>Dictation</h3>
-              </div>
-              <span>Global shortcut</span>
+              <span className="status-dot" />
+              {recording ? "Listening" : transcribing ? "Thinking" : "Ready"}
             </div>
-            <div className="setting-row">
-              <div>
-                <strong>Shortcut</strong>
-                <p>Works from any app on Windows.</p>
-              </div>
+            {availableUpdate && (
               <button
-                className="hotkey"
-                onClick={() => {
-                  setCapturingHotkey(true);
-                  setMessage(
-                    "Press a shortcut with Ctrl, Shift, Alt, or Super. Esc cancels.",
-                  );
-                }}
+                className="update-button"
+                onClick={() => void installUpdate()}
+                disabled={isInstallingUpdate}
               >
-                {capturingHotkey
-                  ? "Press shortcut…"
-                  : displayHotkey(settings.hotkey)}
-              </button>
-            </div>
-            <div className="setting-row">
-              <div>
-                <strong>Interaction</strong>
-                <p>Choose how recording begins and ends.</p>
-              </div>
-              <div className="segmented">
-                <button
-                  className={settings.inputMode === "hold" ? "selected" : ""}
-                  onClick={() =>
-                    void persist({ ...settings, inputMode: "hold" })
-                  }
-                >
-                  Hold to talk
-                </button>
-                <button
-                  className={settings.inputMode === "toggle" ? "selected" : ""}
-                  onClick={() =>
-                    void persist({ ...settings, inputMode: "toggle" })
-                  }
-                >
-                  Toggle
-                </button>
-              </div>
-            </div>
-          </section>
-          <section className="panel">
-            <div className="panel-heading">
-              <div>
-                <SlidersHorizontal size={18} />
-                <h3>Audio & language</h3>
-              </div>
-              <button
-                className="panel-action"
-                onClick={() => void loadMicrophones()}
-              >
-                Refresh
-              </button>
-            </div>
-            <div className="setting-row">
-              <div>
-                <strong>Microphone</strong>
-                <p>Refresh after connecting or reconnecting a device.</p>
-              </div>
-              <Select
-                label="Microphone"
-                value={settings.microphone}
-                onChange={(microphone) =>
-                  void persist({ ...settings, microphone })
-                }
-                options={microphones}
-              />
-            </div>
-            <div className="setting-row">
-              <div>
-                <strong>Language</strong>
-                <p>Whisper detects it automatically.</p>
-              </div>
-              <Select
-                label="Language"
-                value={settings.language}
-                onChange={(language) => void persist({ ...settings, language })}
-                options={[
-                  { value: "auto", label: "Auto-detect" },
-                  { value: "en", label: "English" },
-                  { value: "de", label: "German" },
-                  { value: "es", label: "Spanish" },
-                  { value: "fr", label: "French" },
-                ]}
-              />
-            </div>
-          </section>
-          <section className="panel">
-            <div className="panel-heading">
-              <div>
-                <Cpu size={18} />
-                <h3>Transcription</h3>
-              </div>
-            </div>
-            <div className="setting-row">
-              <div>
-                <strong>Groq model</strong>
-                <p>Turbo is optimized for speed.</p>
-              </div>
-              <Select
-                label="Model"
-                value={settings.model}
-                onChange={(model) =>
-                  void persist({
-                    ...settings,
-                    model: model as Settings["model"],
-                  })
-                }
-                options={[
-                  { value: "whisper-large-v3-turbo", label: "Large v3 Turbo" },
-                  { value: "whisper-large-v3", label: "Large v3" },
-                ]}
-              />
-            </div>
-            <div className="setting-row">
-              <div>
-                <strong>After transcription</strong>
-                <p>What happens to your text.</p>
-              </div>
-              <div className="segmented">
-                <button
-                  className={
-                    settings.outputAction === "paste" ? "selected" : ""
-                  }
-                  onClick={() =>
-                    void persist({ ...settings, outputAction: "paste" })
-                  }
-                >
-                  Auto-paste
-                </button>
-                <button
-                  className={settings.outputAction === "copy" ? "selected" : ""}
-                  onClick={() =>
-                    void persist({ ...settings, outputAction: "copy" })
-                  }
-                >
-                  Copy
-                </button>
-              </div>
-            </div>
-          </section>
-          <section className="panel security-panel">
-            <div className="panel-heading">
-              <div>
-                <LockKeyhole size={18} />
-                <h3>Groq API</h3>
-              </div>
-              <span className={hasApiKey ? "connected" : "disconnected"}>
-                {hasApiKey ? "Connected" : "Needs key"}
-              </span>
-            </div>
-            <p className="api-description">
-              Your API key is encrypted by Windows Credential Manager. It is
-              never written to your history or settings file.
-            </p>
-            <div className="key-input">
-              <input
-                value={apiKey}
-                onChange={(event) => {
-                  setApiKey(event.target.value);
-                  setKeyTest(null);
-                }}
-                type={showApiKey ? "text" : "password"}
-                placeholder={hasApiKey ? "••••••••••••••••••••" : "gsk_…"}
-                aria-label="Groq API key"
-              />
-              <button
-                type="button"
-                className="reveal-key"
-                onClick={() => setShowApiKey((visible) => !visible)}
-                aria-label={showApiKey ? "Hide API key" : "Show API key"}
-                title={showApiKey ? "Hide API key" : "Show API key"}
-              >
-                {showApiKey ? <EyeOff size={15} /> : <Eye size={15} />}
-              </button>
-              <button
-                type="button"
-                className="test-key"
-                onClick={() => void testApiKey()}
-                disabled={isTestingKey || (!apiKey.trim() && !hasApiKey)}
-              >
-                {isTestingKey ? (
-                  <LoaderCircle className="spin" size={16} />
+                {isInstallingUpdate ? (
+                  <LoaderCircle className="spin" size={14} />
                 ) : (
-                  "Test"
+                  <Sparkles size={14} />
                 )}
+                {isInstallingUpdate
+                  ? "Updating…"
+                  : `Update ${availableUpdate.version}`}
               </button>
-              <button
-                onClick={() => void saveKey()}
-                disabled={isSavingKey || !apiKey.trim()}
-              >
-                {isSavingKey ? (
-                  <LoaderCircle className="spin" size={16} />
-                ) : hasApiKey ? (
-                  "Replace"
-                ) : (
-                  "Save key"
-                )}
-              </button>
-              {hasApiKey && (
+            )}
+          </header>
+          <section className="command-card">
+            <div className="command-icon">
+              <Mic size={22} />
+            </div>
+            <div className="command-copy">
+              <span className="section-kicker">YOUR COMMAND</span>
+              <h2>{displayHotkey(settings.hotkey)}</h2>
+              <p>
+                {recording
+                  ? "Release to transcribe · Esc to cancel"
+                  : settings.inputMode === "hold"
+                    ? "Hold anywhere to dictate"
+                    : "Press to start or stop dictation"}
+              </p>
+            </div>
+            <div
+              className={`audio-bars ${recording ? "live" : ""}`}
+              aria-label={
+                recording ? "Live microphone level" : "Microphone level"
+              }
+              role="img"
+            >
+              {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => (
+                <i
+                  key={i}
+                  style={{
+                    height: `${Math.round(
+                      5 + meterLevel * (11 + ((i * 17) % 31)),
+                    )}px`,
+                  }}
+                />
+              ))}
+            </div>
+          </section>
+          <p className={`notice ${recording || transcribing ? "active" : ""}`}>
+            {transcribing && <LoaderCircle size={14} className="spin" />}
+            {message}
+          </p>
+          <div className="settings-grid">
+            <section className="panel shortcut-panel">
+              <div className="panel-heading">
+                <div>
+                  <Keyboard size={18} />
+                  <h3>Dictation</h3>
+                </div>
+                <span>Global shortcut</span>
+              </div>
+              <div className="setting-row">
+                <div>
+                  <strong>Shortcut</strong>
+                  <p>Works from any app on Windows.</p>
+                </div>
                 <button
-                  className="remove-key"
-                  onClick={() => void removeApiKey()}
-                  disabled={isDeletingKey}
+                  className="hotkey"
+                  onClick={() => {
+                    setCapturingHotkey(true);
+                    setMessage(
+                      "Press a shortcut with Ctrl, Shift, Alt, or Super. Esc cancels.",
+                    );
+                  }}
                 >
-                  {isDeletingKey ? (
+                  {capturingHotkey
+                    ? "Press shortcut…"
+                    : displayHotkey(settings.hotkey)}
+                </button>
+              </div>
+              <div className="setting-row">
+                <div>
+                  <strong>Interaction</strong>
+                  <p>Choose how recording begins and ends.</p>
+                </div>
+                <div className="segmented">
+                  <button
+                    className={settings.inputMode === "hold" ? "selected" : ""}
+                    onClick={() =>
+                      void persist({ ...settings, inputMode: "hold" })
+                    }
+                  >
+                    Hold to talk
+                  </button>
+                  <button
+                    className={
+                      settings.inputMode === "toggle" ? "selected" : ""
+                    }
+                    onClick={() =>
+                      void persist({ ...settings, inputMode: "toggle" })
+                    }
+                  >
+                    Toggle
+                  </button>
+                </div>
+              </div>
+            </section>
+            <section className="panel">
+              <div className="panel-heading">
+                <div>
+                  <SlidersHorizontal size={18} />
+                  <h3>Audio & language</h3>
+                </div>
+                <button
+                  className="panel-action"
+                  onClick={() => void loadMicrophones()}
+                >
+                  Refresh
+                </button>
+              </div>
+              <div className="setting-row">
+                <div>
+                  <strong>Microphone</strong>
+                  <p>Refresh after connecting or reconnecting a device.</p>
+                </div>
+                <Select
+                  label="Microphone"
+                  value={settings.microphone}
+                  onChange={(microphone) =>
+                    void persist({ ...settings, microphone })
+                  }
+                  options={microphones}
+                />
+              </div>
+              <div className="setting-row">
+                <div>
+                  <strong>Language</strong>
+                  <p>Whisper detects it automatically.</p>
+                </div>
+                <Select
+                  label="Language"
+                  value={settings.language}
+                  onChange={(language) =>
+                    void persist({ ...settings, language })
+                  }
+                  options={[
+                    { value: "auto", label: "Auto-detect" },
+                    { value: "en", label: "English" },
+                    { value: "de", label: "German" },
+                    { value: "es", label: "Spanish" },
+                    { value: "fr", label: "French" },
+                  ]}
+                />
+              </div>
+            </section>
+            <section className="panel">
+              <div className="panel-heading">
+                <div>
+                  <Cpu size={18} />
+                  <h3>Transcription</h3>
+                </div>
+              </div>
+              <div className="setting-row">
+                <div>
+                  <strong>Groq model</strong>
+                  <p>Turbo is optimized for speed.</p>
+                </div>
+                <Select
+                  label="Model"
+                  value={settings.model}
+                  onChange={(model) =>
+                    void persist({
+                      ...settings,
+                      model: model as Settings["model"],
+                    })
+                  }
+                  options={[
+                    {
+                      value: "whisper-large-v3-turbo",
+                      label: "Large v3 Turbo",
+                    },
+                    { value: "whisper-large-v3", label: "Large v3" },
+                  ]}
+                />
+              </div>
+              <div className="setting-row">
+                <div>
+                  <strong>After transcription</strong>
+                  <p>What happens to your text.</p>
+                </div>
+                <div className="segmented">
+                  <button
+                    className={
+                      settings.outputAction === "paste" ? "selected" : ""
+                    }
+                    onClick={() =>
+                      void persist({ ...settings, outputAction: "paste" })
+                    }
+                  >
+                    Auto-paste
+                  </button>
+                  <button
+                    className={
+                      settings.outputAction === "copy" ? "selected" : ""
+                    }
+                    onClick={() =>
+                      void persist({ ...settings, outputAction: "copy" })
+                    }
+                  >
+                    Copy
+                  </button>
+                </div>
+              </div>
+            </section>
+            <section className="panel security-panel">
+              <div className="panel-heading">
+                <div>
+                  <LockKeyhole size={18} />
+                  <h3>Groq API</h3>
+                </div>
+                <span className={hasApiKey ? "connected" : "disconnected"}>
+                  {hasApiKey ? "Connected" : "Needs key"}
+                </span>
+              </div>
+              <p className="api-description">
+                Your API key is encrypted by Windows Credential Manager. It is
+                never written to your history or settings file.
+              </p>
+              <div className="api-key-entry">
+                <div className="api-key-label">
+                  <label htmlFor="groq-api-key">Groq API key</label>
+                  <span>
+                    {hasApiKey ? "Stored securely" : "Required for dictation"}
+                  </span>
+                </div>
+                <div className="key-input">
+                  <input
+                    id="groq-api-key"
+                    value={apiKey}
+                    onChange={(event) => {
+                      setApiKey(event.target.value);
+                      setKeyTest(null);
+                    }}
+                    type={showApiKey ? "text" : "password"}
+                    placeholder={
+                      hasApiKey ? "Paste a replacement key" : "gsk_…"
+                    }
+                    aria-label="Groq API key"
+                  />
+                  <button
+                    type="button"
+                    className="reveal-key"
+                    onClick={() => setShowApiKey((visible) => !visible)}
+                    aria-label={showApiKey ? "Hide API key" : "Show API key"}
+                    title={showApiKey ? "Hide API key" : "Show API key"}
+                  >
+                    {showApiKey ? <EyeOff size={15} /> : <Eye size={15} />}
+                  </button>
+                </div>
+              </div>
+              <div className="api-actions">
+                <button
+                  type="button"
+                  className="test-key"
+                  onClick={() => void testApiKey()}
+                  disabled={isTestingKey || (!apiKey.trim() && !hasApiKey)}
+                >
+                  {isTestingKey ? (
                     <LoaderCircle className="spin" size={16} />
                   ) : (
-                    "Remove"
+                    "Test connection"
                   )}
                 </button>
-              )}
-            </div>
-            {keyTest ? (
-              <p
-                className={`key-test ${keyTest.success ? "success" : "error"}`}
-              >
-                {keyTest.success ? (
-                  <Check size={13} />
-                ) : (
-                  <CircleAlert size={13} />
+                <button
+                  className="save-key"
+                  onClick={() => void saveKey()}
+                  disabled={isSavingKey || !apiKey.trim()}
+                >
+                  {isSavingKey ? (
+                    <LoaderCircle className="spin" size={16} />
+                  ) : hasApiKey ? (
+                    "Replace"
+                  ) : (
+                    "Save key"
+                  )}
+                </button>
+                {hasApiKey && (
+                  <button
+                    className="remove-key"
+                    onClick={() => void removeApiKey()}
+                    disabled={isDeletingKey}
+                  >
+                    {isDeletingKey ? (
+                      <LoaderCircle className="spin" size={16} />
+                    ) : (
+                      "Remove"
+                    )}
+                  </button>
                 )}
-                {keyTest.message}
-              </p>
-            ) : !hasApiKey ? (
-              <p className="key-onboarding">
-                1. Create a key · 2. Paste it here · 3. Test it · 4. Save it
-                securely
-              </p>
-            ) : null}
-            <button
-              type="button"
-              className="inline-link"
-              onClick={() => void openGroqKeys()}
-            >
-              Get a Groq API key <ExternalLink size={13} />
-            </button>
-          </section>
-          <section className="panel behavior-panel">
-            <div className="panel-heading">
-              <div>
-                <MonitorUp size={18} />
-                <h3>App behavior</h3>
               </div>
-            </div>
-            <div className="setting-row">
-              <div>
-                <strong>Keep running in tray</strong>
-                <p>Close the window without quitting.</p>
+              {keyTest ? (
+                <p
+                  className={`key-test ${keyTest.success ? "success" : "error"}`}
+                >
+                  {keyTest.success ? (
+                    <Check size={13} />
+                  ) : (
+                    <CircleAlert size={13} />
+                  )}
+                  {keyTest.message}
+                </p>
+              ) : !hasApiKey ? (
+                <p className="key-onboarding">
+                  1. Create a key · 2. Paste it here · 3. Test it · 4. Save it
+                  securely
+                </p>
+              ) : null}
+              <div className="api-footer">
+                <button
+                  type="button"
+                  className="inline-link"
+                  onClick={() => void openGroqKeys()}
+                >
+                  Get a Groq API key <ExternalLink size={13} />
+                </button>
+                <span>Testing never stores the entered key.</span>
               </div>
-              <Toggle
-                label="Keep running in tray"
-                checked={settings.keepRunningInTray}
-                onChange={(keepRunningInTray) =>
-                  void persist({ ...settings, keepRunningInTray })
-                }
-              />
-            </div>
-            <div className="setting-row">
-              <div>
-                <strong>Launch at sign-in</strong>
-                <p>Always have dictation ready.</p>
+            </section>
+            <section className="panel behavior-panel">
+              <div className="panel-heading">
+                <div>
+                  <MonitorUp size={18} />
+                  <h3>App behavior</h3>
+                </div>
               </div>
-              <Toggle
-                label="Launch at sign-in"
-                checked={settings.launchAtLogin}
-                onChange={(launchAtLogin) =>
-                  void persist({ ...settings, launchAtLogin })
-                }
-              />
-            </div>
-            <div className="setting-row">
-              <div>
-                <strong>Start in tray</strong>
-                <p>Hide the window when Wispr Type launches.</p>
+              <div className="setting-row">
+                <div>
+                  <strong>Keep running in tray</strong>
+                  <p>Close the window without quitting.</p>
+                </div>
+                <Toggle
+                  label="Keep running in tray"
+                  checked={settings.keepRunningInTray}
+                  onChange={(keepRunningInTray) =>
+                    void persist({ ...settings, keepRunningInTray })
+                  }
+                />
               </div>
-              <Toggle
-                label="Start in tray"
-                checked={settings.startInTray}
-                onChange={(startInTray) =>
-                  void persist({ ...settings, startInTray })
-                }
-              />
-            </div>
-          </section>
+              <div className="setting-row">
+                <div>
+                  <strong>Launch at sign-in</strong>
+                  <p>Always have dictation ready.</p>
+                </div>
+                <Toggle
+                  label="Launch at sign-in"
+                  checked={settings.launchAtLogin}
+                  onChange={(launchAtLogin) =>
+                    void persist({ ...settings, launchAtLogin })
+                  }
+                />
+              </div>
+              <div className="setting-row">
+                <div>
+                  <strong>Start in tray</strong>
+                  <p>Hide the window when Wispr Type launches.</p>
+                </div>
+                <Toggle
+                  label="Start in tray"
+                  checked={settings.startInTray}
+                  onChange={(startInTray) =>
+                    void persist({ ...settings, startInTray })
+                  }
+                />
+              </div>
+            </section>
+            <section className="panel privacy-panel">
+              <div className="panel-heading">
+                <div>
+                  <ShieldCheck size={18} />
+                  <h3>Privacy & safety</h3>
+                </div>
+                <span>On this device</span>
+              </div>
+              <div className="setting-row">
+                <div>
+                  <strong>Keep transcripts</strong>
+                  <p>
+                    Saved only on this device. Pinned items count toward the
+                    limit.
+                  </p>
+                </div>
+                <Select
+                  label="Transcript retention"
+                  value={settings.historyRetention}
+                  onChange={(historyRetention) => {
+                    const next = {
+                      ...settings,
+                      historyRetention:
+                        historyRetention as Settings["historyRetention"],
+                    };
+                    void persist(next).then(() => {
+                      if (historyRetention === "never") setHistory([]);
+                    });
+                  }}
+                  options={[
+                    { value: "15", label: "Last 15" },
+                    { value: "30", label: "Last 30" },
+                    { value: "never", label: "Don’t save" },
+                  ]}
+                />
+              </div>
+              <div className="privacy-notes">
+                <span>
+                  Audio is processed for transcription and is not stored by
+                  Wispr Type.
+                </span>
+                <span>Your API key stays in Windows Credential Manager.</span>
+              </div>
+              <div className="privacy-reset">
+                <div>
+                  <strong>Reset local data</strong>
+                  <p>
+                    Delete the key, settings, history, and launch-at-sign-in
+                    setting.
+                  </p>
+                </div>
+                <button onClick={() => void resetLocalData()}>
+                  <Trash2 size={14} /> Reset app
+                </button>
+              </div>
+            </section>
+          </div>
         </div>
         <section className="history-section" id="history">
           <div className="history-heading">
             <div>
               <History size={18} />
               <h3>Recent transcripts</h3>
-              <span>Last 15</span>
+              <span>
+                {settings.historyRetention === "never"
+                  ? "Not saved"
+                  : `Last ${settings.historyRetention}`}
+              </span>
             </div>
-            <button
-              onClick={() =>
-                void invoke("clear_history").then(() => setHistory([]))
-              }
-            >
-              Clear
-            </button>
+            {history.length > 0 && (
+              <button onClick={() => void clearHistory()}>Clear</button>
+            )}
           </div>
+          <label className="history-search">
+            <Search size={14} />
+            <span className="sr-only">Search transcript history</span>
+            <input
+              value={historyQuery}
+              onChange={(event) => setHistoryQuery(event.target.value)}
+              placeholder="Search transcripts"
+            />
+          </label>
           {history.length ? (
             <div className="history-list">
-              {history.map((item) => (
-                <article key={item.id}>
-                  <p>{item.text}</p>
-                  <span>
-                    {new Date(item.createdAt).toLocaleString()} ·{" "}
-                    {item.language || "Auto"}
-                  </span>
-                  <button
-                    onClick={() =>
-                      void invoke("copy_to_clipboard", {
-                        text: item.text,
-                      }).then(() =>
-                        setMessage("Transcript copied to clipboard"),
-                      )
-                    }
-                    aria-label="Copy transcript"
+              {filteredHistory.map((item) => {
+                const editing = editingHistoryId === item.id;
+                return (
+                  <article
+                    key={item.id}
+                    className={item.pinned ? "pinned" : ""}
                   >
-                    <Copy size={15} />
-                  </button>
-                </article>
-              ))}
+                    {editing ? (
+                      <textarea
+                        value={editingText}
+                        onChange={(event) => setEditingText(event.target.value)}
+                        aria-label="Edit transcript"
+                        autoFocus
+                      />
+                    ) : (
+                      <p>{item.text}</p>
+                    )}
+                    <span>
+                      {item.pinned && "Pinned · "}
+                      {new Date(item.createdAt).toLocaleString()} ·{" "}
+                      {item.language || "Auto"}
+                    </span>
+                    <div className="history-actions">
+                      {editing ? (
+                        <>
+                          <button onClick={() => void saveHistoryEdit()}>
+                            Save
+                          </button>
+                          <button
+                            onClick={() => {
+                              setEditingHistoryId(null);
+                              setEditingText("");
+                            }}
+                          >
+                            Cancel
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => void togglePinned(item)}
+                            aria-label={
+                              item.pinned
+                                ? "Unpin transcript"
+                                : "Pin transcript"
+                            }
+                            title={item.pinned ? "Unpin" : "Pin"}
+                          >
+                            {item.pinned ? (
+                              <PinOff size={14} />
+                            ) : (
+                              <Pin size={14} />
+                            )}
+                          </button>
+                          <button
+                            onClick={() => {
+                              setEditingHistoryId(item.id);
+                              setEditingText(item.text);
+                            }}
+                            aria-label="Edit transcript"
+                            title="Edit"
+                          >
+                            <Pencil size={14} />
+                          </button>
+                          <button
+                            onClick={() => void copyTranscript(item)}
+                            aria-label="Copy transcript"
+                            title="Copy"
+                          >
+                            <Copy size={15} />
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          ) : settings.historyRetention === "never" ? (
+            <div className="history-empty">
+              <ShieldCheck size={17} /> Transcript saving is turned off.
             </div>
           ) : (
             <div className="history-empty">
-              <Volume2 size={17} /> Your latest 15 transcripts will appear here.
+              <Volume2 size={17} /> Your latest transcripts will appear here.
+            </div>
+          )}
+          {history.length > 0 && filteredHistory.length === 0 && (
+            <div className="history-empty">
+              No transcripts match that search.
             </div>
           )}
         </section>

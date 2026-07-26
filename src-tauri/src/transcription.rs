@@ -1,6 +1,9 @@
 use crate::{
     models::{AppState, GroqResponse, Transcript},
-    storage::{history_path, load_history, load_settings, secure_entry, write_json},
+    storage::{
+        history_limit, history_path, load_history, load_settings, secure_entry, sort_history,
+        write_json,
+    },
 };
 use chrono::Utc;
 use enigo::{Direction, Enigo, Key, Keyboard, Settings as EnigoSettings};
@@ -77,19 +80,25 @@ pub(crate) async fn transcribe_audio(
         return Err("No speech was detected.".into());
     }
     paste_text(&app, &text, output_action == "paste")?;
+    let limit = history_limit(&settings);
     let item = Transcript {
         id: format!("{}-{}", Utc::now().timestamp_millis(), text.len()),
         text,
         created_at: Utc::now().to_rfc3339(),
         language: result.language.unwrap_or(settings.language),
+        pinned: false,
     };
+    if limit == 0 {
+        return Ok(item);
+    }
     let _guard = state
         .history_lock
         .lock()
         .map_err(|_| "History is unavailable".to_string())?;
     let mut history = load_history(state);
     history.insert(0, item.clone());
-    history.truncate(15);
+    sort_history(&mut history);
+    history.truncate(limit);
     write_json(history_path(state), &history)?;
     Ok(item)
 }

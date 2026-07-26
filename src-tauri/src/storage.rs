@@ -27,6 +27,21 @@ pub(crate) fn load_settings(state: &AppState) -> AppSettings {
 pub(crate) fn load_history(state: &AppState) -> Vec<Transcript> {
     read_json(history_path(state)).unwrap_or_default()
 }
+pub(crate) fn history_limit(settings: &AppSettings) -> usize {
+    match settings.history_retention.as_str() {
+        "never" => 0,
+        "30" => 30,
+        _ => 15,
+    }
+}
+pub(crate) fn sort_history(history: &mut [Transcript]) {
+    history.sort_by(|left, right| {
+        right
+            .pinned
+            .cmp(&left.pinned)
+            .then_with(|| right.created_at.cmp(&left.created_at))
+    });
+}
 pub(crate) fn secure_entry() -> Result<Entry, String> {
     Entry::new(APP_SERVICE, KEY_ACCOUNT).map_err(|err| err.to_string())
 }

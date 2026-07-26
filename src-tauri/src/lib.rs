@@ -116,6 +116,26 @@ fn clear_history(state: State<AppState>) -> Result<(), String> {
     commands::clear_history(state)
 }
 #[tauri::command]
+fn update_history_item(
+    state: State<AppState>,
+    id: String,
+    text: String,
+) -> Result<Transcript, String> {
+    commands::update_history_item(state, id, text)
+}
+#[tauri::command]
+fn set_history_pinned(
+    state: State<AppState>,
+    id: String,
+    pinned: bool,
+) -> Result<Vec<Transcript>, String> {
+    commands::set_history_pinned(state, id, pinned)
+}
+#[tauri::command]
+fn reset_local_data(app: AppHandle, state: State<AppState>) -> Result<(), String> {
+    commands::reset_local_data(app, state)
+}
+#[tauri::command]
 fn copy_to_clipboard(app: AppHandle, text: String) -> Result<(), String> {
     transcription::copy_to_clipboard(app, text)
 }
@@ -209,6 +229,9 @@ pub fn run() {
             set_activity_state,
             get_history,
             clear_history,
+            update_history_item,
+            set_history_pinned,
+            reset_local_data,
             copy_to_clipboard
         ])
         .run(tauri::generate_context!())

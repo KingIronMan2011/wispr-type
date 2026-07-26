@@ -18,6 +18,12 @@ pub(crate) struct AppSettings {
     pub(crate) keep_running_in_tray: bool,
     pub(crate) launch_at_login: bool,
     pub(crate) start_in_tray: bool,
+    #[serde(default = "default_history_retention")]
+    pub(crate) history_retention: String,
+}
+
+fn default_history_retention() -> String {
+    "15".into()
 }
 
 impl Default for AppSettings {
@@ -32,6 +38,7 @@ impl Default for AppSettings {
             keep_running_in_tray: true,
             launch_at_login: false,
             start_in_tray: false,
+            history_retention: default_history_retention(),
         }
     }
 }
@@ -43,6 +50,8 @@ pub(crate) struct Transcript {
     pub(crate) text: String,
     pub(crate) created_at: String,
     pub(crate) language: String,
+    #[serde(default)]
+    pub(crate) pinned: bool,
 }
 
 #[derive(Deserialize)]

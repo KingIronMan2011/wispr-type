@@ -1,9 +1,12 @@
 use crate::{
     models::{AppSettings, AppState, Transcript},
-    storage::{history_path, load_history, load_settings, secure_entry, settings_path, write_json},
+    storage::{
+        history_limit, history_path, load_history, load_settings, secure_entry, settings_path,
+        sort_history, write_json,
+    },
 };
 use serde::Serialize;
-use std::time::Duration;
+use std::{fs, time::Duration};
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_autostart::ManagerExt as AutostartExt;
 use tauri_plugin_global_shortcut::GlobalShortcutExt;
@@ -37,6 +40,9 @@ pub(crate) fn save_settings(
     let existing = load_settings(&state);
     let mut settings = settings;
     settings.hotkey = normalized_hotkey(&settings.hotkey);
+    if !matches!(settings.history_retention.as_str(), "15" | "30" | "never") {
+        settings.history_retention = "15".into();
+    }
     if settings.hotkey != existing.hotkey {
         replace_global_shortcut(&app, &settings.hotkey, &existing.hotkey)?;
     }
@@ -50,7 +56,21 @@ pub(crate) fn save_settings(
     if registered != settings.launch_at_login {
         return Err("Windows could not apply the launch-at-sign-in setting.".into());
     }
-    write_json(settings_path(&state), &settings)
+    write_json(settings_path(&state), &settings)?;
+    let _guard = state
+        .history_lock
+        .lock()
+        .map_err(|_| "History is unavailable".to_string())?;
+    let limit = history_limit(&settings);
+    let mut history = if limit == 0 {
+        Vec::new()
+    } else {
+        load_history(&state)
+    };
+    sort_history(&mut history);
+    history.truncate(limit);
+    write_json(history_path(&state), &history)?;
+    Ok(())
 }
 
 pub(crate) fn set_global_shortcut(
@@ -203,4 +223,78 @@ pub(crate) fn clear_history(state: State<AppState>) -> Result<(), String> {
         .lock()
         .map_err(|_| "History is unavailable".to_string())?;
     write_json(history_path(&state), &Vec::<Transcript>::new())
+}
+
+pub(crate) fn update_history_item(
+    state: State<AppState>,
+    id: String,
+    text: String,
+) -> Result<Transcript, String> {
+    let text = text.trim().to_string();
+    if text.is_empty() {
+        return Err("A transcript cannot be empty.".into());
+    }
+    let _guard = state
+        .history_lock
+        .lock()
+        .map_err(|_| "History is unavailable".to_string())?;
+    let mut history = load_history(&state);
+    let item = history
+        .iter_mut()
+        .find(|item| item.id == id)
+        .ok_or_else(|| "That transcript is no longer available.".to_string())?;
+    item.text = text;
+    let updated = item.clone();
+    write_json(history_path(&state), &history)?;
+    Ok(updated)
+}
+
+pub(crate) fn set_history_pinned(
+    state: State<AppState>,
+    id: String,
+    pinned: bool,
+) -> Result<Vec<Transcript>, String> {
+    let _guard = state
+        .history_lock
+        .lock()
+        .map_err(|_| "History is unavailable".to_string())?;
+    let mut history = load_history(&state);
+    let item = history
+        .iter_mut()
+        .find(|item| item.id == id)
+        .ok_or_else(|| "That transcript is no longer available.".to_string())?;
+    item.pinned = pinned;
+    sort_history(&mut history);
+    write_json(history_path(&state), &history)?;
+    Ok(history)
+}
+
+pub(crate) fn reset_local_data(app: AppHandle, state: State<AppState>) -> Result<(), String> {
+    let _guard = state
+        .history_lock
+        .lock()
+        .map_err(|_| "Local data is unavailable".to_string())?;
+
+    let autostart = app.autolaunch();
+    let _ = autostart.disable();
+    let shortcuts = app.global_shortcut();
+    let _ = shortcuts.unregister_all();
+    let _ = shortcuts.register(AppSettings::default().hotkey.as_str());
+    let _ =
+        secure_entry().and_then(|entry| entry.delete_credential().map_err(|err| err.to_string()));
+    let _ = fs::remove_file(settings_path(&state));
+    let _ = fs::remove_file(history_path(&state));
+    if let Ok(entries) = fs::read_dir(&state.data_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let is_capture = path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.starts_with("capture-") && name.ends_with(".wav"));
+            if is_capture {
+                let _ = fs::remove_file(path);
+            }
+        }
+    }
+    Ok(())
 }

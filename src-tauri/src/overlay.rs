@@ -1,5 +1,7 @@
 use serde::Serialize;
-use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri::{
+    AppHandle, Emitter, Manager, PhysicalPosition, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
+};
 
 pub(crate) const OVERLAY_LABEL: &str = "dictation-overlay";
 
@@ -8,6 +10,21 @@ pub(crate) const OVERLAY_LABEL: &str = "dictation-overlay";
 pub(crate) struct OverlayPayload {
     state: String,
     message: String,
+}
+
+fn place_at_top_center(app: &AppHandle, window: &WebviewWindow) {
+    let Ok(Some(monitor)) = app.primary_monitor() else {
+        return;
+    };
+    let Ok(window_size) = window.outer_size() else {
+        return;
+    };
+    let monitor_size = monitor.size();
+    let monitor_position = monitor.position();
+    let x = monitor_position.x
+        + i32::try_from(monitor_size.width.saturating_sub(window_size.width) / 2).unwrap_or(0);
+    let y = monitor_position.y + 28;
+    let _ = window.set_position(PhysicalPosition::new(x, y));
 }
 
 pub(crate) fn create(app: &AppHandle) -> tauri::Result<()> {
@@ -20,10 +37,9 @@ pub(crate) fn create(app: &AppHandle) -> tauri::Result<()> {
         WebviewUrl::App("index.html#dictation-overlay".into()),
     )
     .title("Wispr Type")
-    .inner_size(390.0, 112.0)
-    .min_inner_size(390.0, 112.0)
-    .max_inner_size(390.0, 112.0)
-    .center()
+    .inner_size(286.0, 62.0)
+    .min_inner_size(286.0, 62.0)
+    .max_inner_size(286.0, 62.0)
     .decorations(false)
     .transparent(true)
     .shadow(false)
@@ -33,6 +49,7 @@ pub(crate) fn create(app: &AppHandle) -> tauri::Result<()> {
     .visible(false)
     .build()?;
     overlay.set_ignore_cursor_events(true)?;
+    place_at_top_center(app, &overlay);
     Ok(())
 }
 
