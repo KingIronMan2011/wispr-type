@@ -23,7 +23,7 @@ fn place_at_top_center(app: &AppHandle, window: &WebviewWindow) {
     let monitor_position = monitor.position();
     let x = monitor_position.x
         + i32::try_from(monitor_size.width.saturating_sub(window_size.width) / 2).unwrap_or(0);
-    let y = monitor_position.y + 28;
+    let y = monitor_position.y + 12;
     let _ = window.set_position(PhysicalPosition::new(x, y));
 }
 

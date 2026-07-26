@@ -16,5 +16,22 @@ export default defineConfig({
   envPrefix: ["VITE_"],
   build: {
     target: ["es2022", "chrome118", "safari13"],
+    rolldownOptions: {
+      output: {
+        codeSplitting: {
+          groups: [
+            {
+              name: "vendor-react",
+              test: /[\\/]node_modules[\\/]react(?:-dom)?[\\/]/,
+            },
+            {
+              name: "vendor-tauri",
+              test: /[\\/]node_modules[\\/]@tauri-apps[\\/]/,
+            },
+            { name: "icons", test: /[\\/]node_modules[\\/]lucide-react[\\/]/ },
+          ],
+        },
+      },
+    },
   },
 });

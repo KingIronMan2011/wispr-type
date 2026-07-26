@@ -36,7 +36,7 @@ pub(crate) fn save_settings(
     app: AppHandle,
     state: State<AppState>,
     settings: AppSettings,
-) -> Result<(), String> {
+) -> Result<AppSettings, String> {
     let existing = load_settings(&state);
     let mut settings = settings;
     settings.hotkey = normalized_hotkey(&settings.hotkey);
@@ -46,15 +46,17 @@ pub(crate) fn save_settings(
     if settings.hotkey != existing.hotkey {
         replace_global_shortcut(&app, &settings.hotkey, &existing.hotkey)?;
     }
-    let autostart = app.autolaunch();
-    if settings.launch_at_login {
-        autostart.enable().map_err(|err| err.to_string())?;
-    } else {
-        autostart.disable().map_err(|err| err.to_string())?;
-    }
-    let registered = autostart.is_enabled().map_err(|err| err.to_string())?;
-    if registered != settings.launch_at_login {
-        return Err("Windows could not apply the launch-at-sign-in setting.".into());
+    if settings.launch_at_login != existing.launch_at_login {
+        let autostart = app.autolaunch();
+        if settings.launch_at_login {
+            autostart.enable().map_err(|err| err.to_string())?;
+        } else {
+            autostart.disable().map_err(|err| err.to_string())?;
+        }
+        let registered = autostart.is_enabled().map_err(|err| err.to_string())?;
+        if registered != settings.launch_at_login {
+            return Err("Windows could not apply the launch-at-sign-in setting.".into());
+        }
     }
     write_json(settings_path(&state), &settings)?;
     let _guard = state
@@ -70,7 +72,7 @@ pub(crate) fn save_settings(
     sort_history(&mut history);
     history.truncate(limit);
     write_json(history_path(&state), &history)?;
-    Ok(())
+    Ok(settings)
 }
 
 pub(crate) fn set_global_shortcut(

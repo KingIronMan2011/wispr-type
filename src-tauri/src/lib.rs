@@ -72,7 +72,7 @@ fn save_settings(
     app: AppHandle,
     state: State<AppState>,
     settings: AppSettings,
-) -> Result<(), String> {
+) -> Result<AppSettings, String> {
     commands::save_settings(app, state, settings)
 }
 #[tauri::command]
