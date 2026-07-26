@@ -2,9 +2,13 @@ use crate::{
     models::{AppSettings, AppState, Transcript},
     storage::{history_path, load_history, load_settings, secure_entry, settings_path, write_json},
 };
+use serde::Serialize;
+use std::time::Duration;
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_autostart::ManagerExt as AutostartExt;
 use tauri_plugin_global_shortcut::GlobalShortcutExt;
+
+const GROQ_MODELS_URL: &str = "https://api.groq.com/openai/v1/models";
 
 fn normalized_hotkey(hotkey: &str) -> String {
     hotkey.replace(' ', "")
@@ -80,6 +84,96 @@ pub(crate) fn delete_api_key() -> Result<(), String> {
     secure_entry()?
         .delete_credential()
         .map_err(|err| err.to_string())
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ApiKeyTestResult {
+    success: bool,
+    message: String,
+}
+
+pub(crate) async fn test_api_key(api_key: Option<String>) -> ApiKeyTestResult {
+    let api_key = match api_key.map(|key| key.trim().to_string()) {
+        Some(key) if !key.is_empty() => key,
+        _ => match secure_entry()
+            .and_then(|entry| entry.get_password().map_err(|err| err.to_string()))
+        {
+            Ok(key) => key,
+            Err(_) => {
+                return ApiKeyTestResult {
+                    success: false,
+                    message: "Add a Groq API key before testing the connection.".into(),
+                }
+            }
+        },
+    };
+    if !api_key.starts_with("gsk_") {
+        return ApiKeyTestResult {
+            success: false,
+            message: "That doesn't look like a Groq API key. It should begin with gsk_.".into(),
+        };
+    }
+
+    let client = match reqwest::Client::builder()
+        .timeout(Duration::from_secs(10))
+        .build()
+    {
+        Ok(client) => client,
+        Err(_) => {
+            return ApiKeyTestResult {
+                success: false,
+                message: "Couldn’t prepare a secure connection to Groq.".into(),
+            }
+        }
+    };
+    let response =
+        match client
+            .get(GROQ_MODELS_URL)
+            .bearer_auth(api_key)
+            .send()
+            .await
+        {
+            Ok(response) => response,
+            Err(error) if error.is_timeout() => return ApiKeyTestResult {
+                success: false,
+                message:
+                    "Groq did not respond in time. Check your internet connection and try again."
+                        .into(),
+            },
+            Err(_) => return ApiKeyTestResult {
+                success: false,
+                message:
+                    "Couldn’t reach Groq. Check your internet connection or firewall and try again."
+                        .into(),
+            },
+        };
+
+    let status = response.status();
+    let message = match status.as_u16() {
+        200 => (true, "Connected to Groq. Your key is ready for dictation."),
+        401 => (
+            false,
+            "Groq rejected this key. Create or copy a fresh key and try again.",
+        ),
+        403 => (
+            false,
+            "This key is valid, but its Groq project does not have the required permissions.",
+        ),
+        429 => (
+            false,
+            "Groq is reachable, but this project is rate-limited. Try again shortly.",
+        ),
+        500..=599 => (false, "Groq is temporarily unavailable. Try again shortly."),
+        _ => (
+            false,
+            "Groq could not validate this key. Try again or check your Groq project settings.",
+        ),
+    };
+    ApiKeyTestResult {
+        success: message.0,
+        message: message.1.into(),
+    }
 }
 
 pub(crate) fn set_activity_state(app: AppHandle, activity: String) -> Result<(), String> {

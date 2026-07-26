@@ -22,6 +22,12 @@ body {
   min-height: 100vh;
   background: #0b0b0e;
 }
+body.overlay-window {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: transparent;
+}
 button,
 input,
 select {
@@ -285,6 +291,96 @@ h1 {
   opacity: 1;
   box-shadow: 0 0 9px rgba(167, 124, 245, 0.38);
 }
+.dictation-overlay {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 100vh;
+  padding: 13px 16px;
+  border: 1px solid rgba(159, 120, 237, 0.58);
+  border-radius: 16px;
+  color: #f7f3ff;
+  background:
+    linear-gradient(110deg, rgba(55, 39, 82, 0.96), rgba(23, 22, 29, 0.97)),
+    #17161d;
+  box-shadow:
+    0 18px 50px rgba(0, 0, 0, 0.42),
+    inset 0 1px rgba(255, 255, 255, 0.07);
+}
+.overlay-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  margin-right: 11px;
+  border: 1px solid #7958b7;
+  border-radius: 12px;
+  color: #d7c2ff;
+  background: #39294f;
+}
+.dictation-overlay.transcribing .overlay-icon {
+  color: #b7a6f2;
+  border-color: #5d4e83;
+  background: #2c2939;
+}
+.dictation-overlay.success .overlay-icon {
+  color: #a5e8c8;
+  border-color: #519873;
+  background: #1f3c30;
+}
+.dictation-overlay.error .overlay-icon {
+  color: #f3b2c1;
+  border-color: #9f526b;
+  background: #41222e;
+}
+.overlay-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.overlay-copy strong {
+  font-size: 12px;
+  font-weight: 630;
+  letter-spacing: -0.01em;
+}
+.overlay-copy span {
+  overflow: hidden;
+  color: #b5afc2;
+  font-size: 10px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.overlay-meter {
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  gap: 4px;
+  height: 48px;
+  margin-left: auto;
+  padding: 0 3px 0 15px;
+}
+.overlay-meter i {
+  display: block;
+  width: 3px;
+  border-radius: 99px;
+  background: linear-gradient(#c8a8ff, #7450bc);
+  box-shadow: 0 0 8px rgba(178, 133, 255, 0.45);
+  transition: height 80ms ease-out;
+}
+.dictation-overlay.transcribing .overlay-meter i {
+  opacity: 0.4;
+  animation: overlay-pulse 1s ease-in-out infinite alternate;
+}
+.dictation-overlay.success .overlay-meter,
+.dictation-overlay.error .overlay-meter {
+  display: none;
+}
+@keyframes overlay-pulse {
+  to {
+    opacity: 0.85;
+  }
+}
 .notice {
   min-height: 20px;
   display: flex;
@@ -520,6 +616,16 @@ h1 {
   background: #302b3d;
   color: #efeaff;
 }
+.key-input button.test-key {
+  border-color: #53486b;
+  background: #292535;
+  color: #c9b5f1;
+}
+.key-input button.test-key:hover:not(:disabled) {
+  border-color: #8a69c9;
+  background: #373043;
+  color: #f1ebff;
+}
 .key-input button:disabled {
   opacity: 0.45;
 }
@@ -532,6 +638,25 @@ h1 {
 .key-input button.remove-key:hover:not(:disabled) {
   border-color: #9e526d;
   background: #40212e;
+}
+.key-test,
+.key-onboarding {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 27px;
+  margin: 7px 19px 0;
+  font-size: 10px;
+  line-height: 1.35;
+}
+.key-test.success {
+  color: #8ed9bd;
+}
+.key-test.error {
+  color: #e9a7b8;
+}
+.key-onboarding {
+  color: #8e899a;
 }
 .inline-link {
   display: inline-flex;

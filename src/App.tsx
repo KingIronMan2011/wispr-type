@@ -6,6 +6,8 @@ import { relaunch } from "@tauri-apps/plugin-process";
 import { check, type Update } from "@tauri-apps/plugin-updater";
 import {
   ChevronDown,
+  Check,
+  CircleAlert,
   Copy,
   Cpu,
   Eye,
@@ -46,6 +48,14 @@ type Transcript = {
 type RecordingStatus = {
   level: number;
   error: string | null;
+};
+type OverlayPayload = {
+  state: "listening" | "transcribing" | "success" | "error";
+  message: string;
+};
+type ApiKeyTestResult = {
+  success: boolean;
+  message: string;
 };
 const fallback: Settings = {
   hotkey: "Ctrl+Shift+Space",
@@ -135,7 +145,99 @@ function Select({
   );
 }
 
+function DictationOverlay() {
+  const [overlay, setOverlay] = useState<OverlayPayload>({
+    state: "listening",
+    message: "Listening — release to transcribe",
+  });
+  const [inputLevel, setInputLevel] = useState(0);
+
+  useEffect(() => {
+    document.body.classList.add("overlay-window");
+    return () => document.body.classList.remove("overlay-window");
+  }, []);
+
+  useEffect(() => {
+    const unlisten = listen<OverlayPayload>("wispr-overlay", (event) => {
+      setOverlay(event.payload);
+      if (event.payload.state !== "listening") setInputLevel(0);
+    });
+    return () => void unlisten.then((fn) => fn());
+  }, []);
+
+  useEffect(() => {
+    if (overlay.state !== "listening") return;
+    let disposed = false;
+    const updateLevel = () => {
+      void invoke<RecordingStatus>("get_recording_status")
+        .then((status) => {
+          if (!disposed) setInputLevel(status.level);
+        })
+        .catch(() => undefined);
+    };
+    updateLevel();
+    const timer = window.setInterval(updateLevel, 80);
+    return () => {
+      disposed = true;
+      window.clearInterval(timer);
+    };
+  }, [overlay.state]);
+
+  useEffect(() => {
+    if (overlay.state !== "success" && overlay.state !== "error") return;
+    const timer = window.setTimeout(() => {
+      void invoke("hide_dictation_overlay");
+    }, 1_800);
+    return () => window.clearTimeout(timer);
+  }, [overlay.state]);
+
+  const meterLevel = Math.max(inputLevel / 1000, 0.06);
+  const icon =
+    overlay.state === "success" ? (
+      <Check size={19} />
+    ) : overlay.state === "error" ? (
+      <CircleAlert size={19} />
+    ) : overlay.state === "transcribing" ? (
+      <LoaderCircle size={19} className="spin" />
+    ) : (
+      <Mic size={19} />
+    );
+
+  return (
+    <main className={`dictation-overlay ${overlay.state}`}>
+      <div className="overlay-icon">{icon}</div>
+      <div className="overlay-copy">
+        <strong>
+          {overlay.state === "listening"
+            ? "Listening"
+            : overlay.state === "transcribing"
+              ? "Transcribing"
+              : overlay.state === "success"
+                ? "Complete"
+                : "Needs attention"}
+        </strong>
+        <span>{overlay.message}</span>
+      </div>
+      <div className="overlay-meter" aria-hidden="true">
+        {[1, 2, 3, 4, 5, 6, 7].map((bar) => (
+          <i
+            key={bar}
+            style={{
+              height: `${Math.round(
+                6 + meterLevel * (12 + ((bar * 13) % 23)),
+              )}px`,
+            }}
+          />
+        ))}
+      </div>
+    </main>
+  );
+}
+
 export default function App() {
+  if (window.location.hash === "#dictation-overlay") {
+    return <DictationOverlay />;
+  }
   const [settings, setSettings] = useState<Settings>(fallback);
   const [history, setHistory] = useState<Transcript[]>([]);
   const [apiKey, setApiKey] = useState("");
@@ -149,6 +251,8 @@ export default function App() {
     { value: string; label: string }[]
   >([{ value: "Default microphone", label: "Default microphone" }]);
   const [isSavingKey, setIsSavingKey] = useState(false);
+  const [isTestingKey, setIsTestingKey] = useState(false);
+  const [keyTest, setKeyTest] = useState<ApiKeyTestResult | null>(null);
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const [inputLevel, setInputLevel] = useState(0);
@@ -374,7 +478,10 @@ export default function App() {
       setApiKey("");
       setShowApiKey(false);
       setHasApiKey(true);
-      setMessage("Groq API key saved securely");
+      setKeyTest(null);
+      setMessage(
+        "Groq API key saved securely — test the connection before dictating.",
+      );
     } catch (error) {
       const detail =
         typeof error === "string"
@@ -385,6 +492,26 @@ export default function App() {
       setMessage(detail || "Couldn’t save the API key");
     } finally {
       setIsSavingKey(false);
+    }
+  };
+
+  const testApiKey = async () => {
+    setIsTestingKey(true);
+    try {
+      const result = await invoke<ApiKeyTestResult>("test_api_key", {
+        apiKey: apiKey.trim() || null,
+      });
+      setKeyTest(result);
+      setMessage(result.message);
+    } catch {
+      const result = {
+        success: false,
+        message: "Couldn’t run the Groq connection test.",
+      };
+      setKeyTest(result);
+      setMessage(result.message);
+    } finally {
+      setIsTestingKey(false);
     }
   };
 
@@ -691,7 +818,10 @@ export default function App() {
             <div className="key-input">
               <input
                 value={apiKey}
-                onChange={(event) => setApiKey(event.target.value)}
+                onChange={(event) => {
+                  setApiKey(event.target.value);
+                  setKeyTest(null);
+                }}
                 type={showApiKey ? "text" : "password"}
                 placeholder={hasApiKey ? "••••••••••••••••••••" : "gsk_…"}
                 aria-label="Groq API key"
@@ -704,6 +834,18 @@ export default function App() {
                 title={showApiKey ? "Hide API key" : "Show API key"}
               >
                 {showApiKey ? <EyeOff size={15} /> : <Eye size={15} />}
+              </button>
+              <button
+                type="button"
+                className="test-key"
+                onClick={() => void testApiKey()}
+                disabled={isTestingKey || (!apiKey.trim() && !hasApiKey)}
+              >
+                {isTestingKey ? (
+                  <LoaderCircle className="spin" size={16} />
+                ) : (
+                  "Test"
+                )}
               </button>
               <button
                 onClick={() => void saveKey()}
@@ -731,6 +873,23 @@ export default function App() {
                 </button>
               )}
             </div>
+            {keyTest ? (
+              <p
+                className={`key-test ${keyTest.success ? "success" : "error"}`}
+              >
+                {keyTest.success ? (
+                  <Check size={13} />
+                ) : (
+                  <CircleAlert size={13} />
+                )}
+                {keyTest.message}
+              </p>
+            ) : !hasApiKey ? (
+              <p className="key-onboarding">
+                1. Create a key · 2. Paste it here · 3. Test it · 4. Save it
+                securely
+              </p>
+            ) : null}
             <button
               type="button"
               className="inline-link"

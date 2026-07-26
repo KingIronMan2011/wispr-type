@@ -2,6 +2,7 @@ mod app;
 mod audio;
 mod commands;
 mod models;
+mod overlay;
 mod storage;
 mod transcription;
 
@@ -22,16 +23,35 @@ fn get_microphones() -> Result<Vec<audio::AudioDevice>, String> {
     audio::get_microphones()
 }
 #[tauri::command]
-fn start_native_recording(state: State<AppState>) -> Result<(), String> {
-    audio::start_native_recording(state)
+fn start_native_recording(app: AppHandle, state: State<AppState>) -> Result<(), String> {
+    match audio::start_native_recording(state) {
+        Ok(()) => {
+            overlay::show(&app, "listening", "Listening — release to transcribe");
+            Ok(())
+        }
+        Err(error) => {
+            overlay::show(&app, "error", &error);
+            Err(error)
+        }
+    }
 }
 #[tauri::command]
 fn get_recording_status(state: State<AppState>) -> audio::RecordingStatus {
     audio::get_recording_status(state)
 }
 #[tauri::command]
-fn cancel_native_recording(state: State<AppState>) -> Result<(), String> {
-    audio::cancel_native_recording(state)
+fn cancel_native_recording(
+    app: AppHandle,
+    state: State<AppState>,
+    reason: Option<String>,
+) -> Result<(), String> {
+    audio::cancel_native_recording(state)?;
+    if let Some(reason) = reason {
+        overlay::show(&app, "error", reason);
+    } else {
+        overlay::hide(&app);
+    }
+    Ok(())
 }
 #[tauri::command]
 async fn stop_native_recording(
@@ -39,7 +59,13 @@ async fn stop_native_recording(
     state: State<'_, AppState>,
     output_action: Option<String>,
 ) -> Result<Transcript, String> {
-    audio::stop_native_recording(app, state, output_action).await
+    overlay::show(&app, "transcribing", "Turning speech into text…");
+    let result = audio::stop_native_recording(app.clone(), state, output_action).await;
+    match &result {
+        Ok(_) => overlay::show(&app, "success", "Done — sent to your workspace"),
+        Err(error) => overlay::show(&app, "error", error),
+    }
+    result
 }
 #[tauri::command]
 fn save_settings(
@@ -64,6 +90,14 @@ fn has_api_key() -> bool {
 #[tauri::command]
 fn save_api_key(api_key: String) -> Result<(), String> {
     commands::save_api_key(api_key)
+}
+#[tauri::command]
+async fn test_api_key(api_key: Option<String>) -> commands::ApiKeyTestResult {
+    commands::test_api_key(api_key).await
+}
+#[tauri::command]
+fn hide_dictation_overlay(app: AppHandle) {
+    overlay::hide(&app);
 }
 #[tauri::command]
 fn delete_api_key() -> Result<(), String> {
@@ -121,6 +155,7 @@ pub fn run() {
                 recording_error: Arc::new(Mutex::new(None)),
             });
             app::set_up_tray(app.handle())?;
+            overlay::create(app.handle())?;
             let mut settings = storage::load_settings(app.state::<AppState>().inner());
             settings.hotkey = settings.hotkey.replace(' ', "");
             if app
@@ -144,6 +179,9 @@ pub fn run() {
         })
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
+                if window.label() != "main" {
+                    return;
+                }
                 if let Some(state) = window.app_handle().try_state::<AppState>() {
                     if storage::load_settings(&state).keep_running_in_tray {
                         api.prevent_close();
@@ -165,6 +203,8 @@ pub fn run() {
             set_global_shortcut,
             has_api_key,
             save_api_key,
+            test_api_key,
+            hide_dictation_overlay,
             delete_api_key,
             set_activity_state,
             get_history,
