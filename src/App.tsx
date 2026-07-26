@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   ChevronDown,
   Copy,
@@ -125,22 +126,43 @@ export default function App() {
     void refresh();
   }, [refresh]);
 
-  const loadMicrophones = useCallback(async () => {
-    const devices = await navigator.mediaDevices.enumerateDevices();
-    const inputs = devices
-      .filter((device) => device.kind === "audioinput")
-      .map((device, index) => ({
-        value: device.deviceId,
-        label: device.label || `Microphone ${index + 1}`,
-      }));
-    setMicrophones([
-      { value: "Default microphone", label: "Default microphone" },
-      ...inputs,
-    ]);
+  const loadMicrophones = useCallback(async (requestPermission = false) => {
+    try {
+      if (requestPermission) {
+        // Windows reveals friendly device labels only after mic permission is granted.
+        const permissionStream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+        });
+        permissionStream.getTracks().forEach((track) => track.stop());
+      }
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const inputs = devices
+        .filter((device) => device.kind === "audioinput")
+        .map((device, index) => ({
+          value: device.deviceId,
+          label: device.label || `Microphone ${index + 1}`,
+        }));
+      setMicrophones([
+        { value: "Default microphone", label: "Default microphone" },
+        ...inputs,
+      ]);
+    } catch {
+      setMessage("Allow microphone access to show your input devices");
+    }
   }, []);
 
   useEffect(() => {
-    void loadMicrophones();
+    void loadMicrophones(true);
+  }, [loadMicrophones]);
+
+  useEffect(() => {
+    const handleDeviceChange = () => void loadMicrophones();
+    navigator.mediaDevices.addEventListener("devicechange", handleDeviceChange);
+    return () =>
+      navigator.mediaDevices.removeEventListener(
+        "devicechange",
+        handleDeviceChange,
+      );
   }, [loadMicrophones]);
 
   const persist = useCallback(async (next: Settings) => {
@@ -254,6 +276,14 @@ export default function App() {
       setMessage("Couldn’t save the API key");
     } finally {
       setIsSavingKey(false);
+    }
+  };
+
+  const openGroqKeys = async () => {
+    try {
+      await openUrl("https://console.groq.com/keys");
+    } catch {
+      setMessage("Couldn’t open your browser. Visit console.groq.com/keys");
     }
   };
 
@@ -382,6 +412,12 @@ export default function App() {
                 <SlidersHorizontal size={18} />
                 <h3>Audio & language</h3>
               </div>
+              <button
+                className="panel-action"
+                onClick={() => void loadMicrophones(true)}
+              >
+                Refresh
+              </button>
             </div>
             <div className="setting-row">
               <div>
@@ -505,14 +541,13 @@ export default function App() {
                 )}
               </button>
             </div>
-            <a
+            <button
+              type="button"
               className="inline-link"
-              href="https://console.groq.com/keys"
-              target="_blank"
-              rel="noreferrer"
+              onClick={() => void openGroqKeys()}
             >
               Get a Groq API key <ExternalLink size={13} />
-            </a>
+            </button>
           </section>
           <section className="panel behavior-panel">
             <div className="panel-heading">
