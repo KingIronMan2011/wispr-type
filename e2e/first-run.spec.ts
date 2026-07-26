@@ -20,6 +20,7 @@ test.beforeEach(async ({ page }) => {
     (
       window as unknown as { __TAURI_INTERNALS__: unknown }
     ).__TAURI_INTERNALS__ = {
+      metadata: { currentWindow: { label: "main" } },
       transformCallback: () => ++callbacks,
       unregisterCallback: () => undefined,
       unregisterListener: () => undefined,

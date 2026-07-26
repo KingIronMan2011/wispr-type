@@ -17,6 +17,7 @@ import {
   sendNotification,
 } from "@tauri-apps/plugin-notification";
 import FirstRunOnboarding from "./components/FirstRunOnboarding";
+import WindowControls from "./components/WindowControls";
 import Sidebar from "./components/Sidebar";
 import {
   fallbackSettings,
@@ -495,18 +496,22 @@ export default function App() {
   if (!bootstrapped) return null;
   if (!settings.completedOnboarding) {
     return (
-      <FirstRunOnboarding
-        apiKey={apiKey}
-        onApiKeyChange={setApiKey}
-        onSaveAndContinue={() => void completeOnboarding(true)}
-        onContinueWithoutKey={() => void completeOnboarding(false)}
-        saving={isSavingKey}
-      />
+      <>
+        <WindowControls />
+        <FirstRunOnboarding
+          apiKey={apiKey}
+          onApiKeyChange={setApiKey}
+          onSaveAndContinue={() => void completeOnboarding(true)}
+          onContinueWithoutKey={() => void completeOnboarding(false)}
+          saving={isSavingKey}
+        />
+      </>
     );
   }
 
   return (
     <main className="app-shell">
+      <WindowControls />
       <Sidebar
         activeSection={activeSection}
         historyCount={history.length}
