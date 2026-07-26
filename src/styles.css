@@ -189,6 +189,25 @@ h1 {
 .status.thinking .status-dot {
   background: #80aaff;
 }
+.update-button {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-left: auto;
+  margin-right: 10px;
+  border: 1px solid #7253ab;
+  border-radius: 99px;
+  background: #35244e;
+  color: #e5d8ff;
+  padding: 7px 11px;
+  font-size: 11px;
+}
+.update-button:hover:not(:disabled) {
+  background: #463065;
+}
+.update-button:disabled {
+  opacity: 0.72;
+}
 .command-card {
   min-height: 137px;
   position: relative;

@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { relaunch } from "@tauri-apps/plugin-process";
+import { check, type Update } from "@tauri-apps/plugin-updater";
 import {
   ChevronDown,
   Copy,
@@ -131,6 +133,8 @@ export default function App() {
   const [hasApiKey, setHasApiKey] = useState(false);
   const [capturingHotkey, setCapturingHotkey] = useState(false);
   const [isDeletingKey, setIsDeletingKey] = useState(false);
+  const [availableUpdate, setAvailableUpdate] = useState<Update | null>(null);
+  const [isInstallingUpdate, setIsInstallingUpdate] = useState(false);
   const [microphones, setMicrophones] = useState<
     { value: string; label: string }[]
   >([{ value: "Default microphone", label: "Default microphone" }]);
@@ -154,6 +158,21 @@ export default function App() {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    let disposed = false;
+    const timer = window.setTimeout(() => {
+      void check()
+        .then((update) => {
+          if (!disposed) setAvailableUpdate(update);
+        })
+        .catch(() => undefined);
+    }, 1_500);
+    return () => {
+      disposed = true;
+      window.clearTimeout(timer);
+    };
+  }, []);
 
   const loadMicrophones = useCallback(async () => {
     try {
@@ -311,6 +330,18 @@ export default function App() {
     }
   };
 
+  const installUpdate = async () => {
+    if (!availableUpdate || isInstallingUpdate) return;
+    setIsInstallingUpdate(true);
+    try {
+      await availableUpdate.downloadAndInstall();
+      await relaunch();
+    } catch {
+      setIsInstallingUpdate(false);
+      setMessage("Update download failed. Please try again.");
+    }
+  };
+
   return (
     <main className="app-shell">
       <aside className="sidebar">
@@ -354,6 +385,22 @@ export default function App() {
             <span className="status-dot" />
             {recording ? "Listening" : transcribing ? "Thinking" : "Ready"}
           </div>
+          {availableUpdate && (
+            <button
+              className="update-button"
+              onClick={() => void installUpdate()}
+              disabled={isInstallingUpdate}
+            >
+              {isInstallingUpdate ? (
+                <LoaderCircle className="spin" size={14} />
+              ) : (
+                <Sparkles size={14} />
+              )}
+              {isInstallingUpdate
+                ? "Updating…"
+                : `Update ${availableUpdate.version}`}
+            </button>
+          )}
         </header>
         <section className="command-card">
           <div className="command-icon">

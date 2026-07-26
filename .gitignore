@@ -9,6 +9,9 @@ dist/
 # Tauri / Rust build output
 src-tauri/target/
 
+# Release signing material (never commit the private updater key)
+src-tauri/keys/
+
 # Local environment and credentials
 .env
 .env.*
@@ -27,4 +30,3 @@ Thumbs.db
 .idea/
 .vscode/
 *.swp
-

@@ -1,0 +1,30 @@
+# Releasing Wispr Type
+
+Wispr Type uses Tauri's signed updater. An installed copy checks the repository's
+`latest.json`, downloads a verified update, then runs the Windows installer in
+passive mode.
+
+## One-time GitHub setup
+
+1. Keep `src-tauri/keys/wispr-type-updater.key` private; it is ignored by Git.
+2. Create the repository secret `TAURI_SIGNING_PRIVATE_KEY` with the full contents
+   of that file. Do not add the key to source control or release assets.
+3. The public counterpart is embedded in `tauri.conf.json` and is safe to commit.
+
+## Publish a release
+
+1. Update `version` in `package.json`, `src-tauri/Cargo.toml`, and
+   `src-tauri/tauri.conf.json` to the same semantic version.
+2. Create and push a matching tag, such as `v0.1.1`.
+3. The GitHub Actions release workflow builds, signs, uploads the Windows updater
+   artifact, and publishes the `latest.json` feed used by the app.
+
+For a local signed release build in PowerShell, load the ignored private key
+into the same environment variable used by GitHub Actions before running
+`pnpm build`:
+
+```powershell
+$env:TAURI_SIGNING_PRIVATE_KEY = Get-Content -Raw src-tauri\keys\wispr-type-updater.key
+$env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = ""
+pnpm build
+```

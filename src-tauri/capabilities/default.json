@@ -8,6 +8,8 @@
     "autostart:default",
     "clipboard-manager:default",
     "opener:default",
+    "process:default",
+    "updater:default",
     "global-shortcut:default"
   ]
 }
