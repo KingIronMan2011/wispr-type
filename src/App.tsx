@@ -11,6 +11,12 @@ import { listen } from "@tauri-apps/api/event";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { check, type Update } from "@tauri-apps/plugin-updater";
+import {
+  isPermissionGranted,
+  requestPermission,
+  sendNotification,
+} from "@tauri-apps/plugin-notification";
+import FirstRunOnboarding from "./components/FirstRunOnboarding";
 import Sidebar from "./components/Sidebar";
 import {
   fallbackSettings,
@@ -62,6 +68,7 @@ export default function App() {
   const [transcribing, setTranscribing] = useState(false);
   const [inputLevel, setInputLevel] = useState(0);
   const [message, setMessage] = useState("Ready when you are");
+  const [bootstrapped, setBootstrapped] = useState(false);
   const recordingRef = useRef(false);
   const settingsRef = useRef<Settings>(fallbackSettings);
   const settingsSaveVersion = useRef(0);
@@ -76,6 +83,7 @@ export default function App() {
     setSettings(saved);
     setHistory(items);
     setHasApiKey(keyStatus);
+    setBootstrapped(true);
   }, []);
 
   useEffect(() => {
@@ -196,6 +204,21 @@ export default function App() {
             ? "Pasted into your active app"
             : "Copied to clipboard",
         );
+        void (async () => {
+          if (!settingsRef.current.notificationsEnabled) return;
+          try {
+            let granted = await isPermissionGranted();
+            if (!granted) granted = (await requestPermission()) === "granted";
+            if (granted) {
+              sendNotification({
+                title: "Wispr Type",
+                body: "Dictation is ready.",
+              });
+            }
+          } catch {
+            // Notification permissions must never interrupt dictation.
+          }
+        })();
       })
       .catch((error) =>
         setMessage(
@@ -322,7 +345,7 @@ export default function App() {
   }, [cancelRecording, capturingHotkey]);
 
   const saveKey = async () => {
-    if (!apiKey.trim()) return;
+    if (!apiKey.trim()) return false;
     setIsSavingKey(true);
     try {
       await invoke("save_api_key", { apiKey: apiKey.trim() });
@@ -333,13 +356,19 @@ export default function App() {
       setMessage(
         "Groq API key saved securely — test the connection before dictating.",
       );
+      return true;
     } catch (error) {
       setMessage(
         typeof error === "string" ? error : "Couldn’t save the API key",
       );
+      return false;
     } finally {
       setIsSavingKey(false);
     }
+  };
+  const completeOnboarding = async (saveKeyFirst: boolean) => {
+    if (saveKeyFirst && !(await saveKey())) return;
+    await persist({ ...settingsRef.current, completedOnboarding: true });
   };
   const testApiKey = async () => {
     setIsTestingKey(true);
@@ -462,6 +491,19 @@ export default function App() {
       .getElementById(section)
       ?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
+
+  if (!bootstrapped) return null;
+  if (!settings.completedOnboarding) {
+    return (
+      <FirstRunOnboarding
+        apiKey={apiKey}
+        onApiKeyChange={setApiKey}
+        onSaveAndContinue={() => void completeOnboarding(true)}
+        onContinueWithoutKey={() => void completeOnboarding(false)}
+        saving={isSavingKey}
+      />
+    );
+  }
 
   return (
     <main className="app-shell">

@@ -9,6 +9,8 @@ export type Settings = {
   launchAtLogin: boolean;
   startInTray: boolean;
   historyRetention: "15" | "30" | "never";
+  notificationsEnabled: boolean;
+  completedOnboarding: boolean;
 };
 
 export type Transcript = {
@@ -45,6 +47,8 @@ export const fallbackSettings: Settings = {
   launchAtLogin: false,
   startInTray: false,
   historyRetention: "15",
+  notificationsEnabled: true,
+  completedOnboarding: false,
 };
 
 export function displayHotkey(hotkey: string) {

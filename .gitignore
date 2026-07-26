@@ -4,6 +4,9 @@ node_modules/
 # Frontend build output and tooling caches
 dist/
 .vite/
+test-results/
+playwright-report/
+blob-report/
 *.tsbuildinfo
 
 # Tauri / Rust build output

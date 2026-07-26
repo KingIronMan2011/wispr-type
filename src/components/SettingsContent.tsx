@@ -234,7 +234,7 @@ export default function SettingsContent({
             />
           </div>
         </section>
-        <section className="panel">
+        <section className="panel transcription-panel">
           <div className="panel-heading">
             <div>
               <Cpu size={18} />
@@ -428,6 +428,19 @@ export default function SettingsContent({
               label="Start in tray"
               checked={settings.startInTray}
               onChange={(startInTray) => persist({ ...settings, startInTray })}
+            />
+          </div>
+          <div className="setting-row">
+            <div>
+              <strong>Windows notifications</strong>
+              <p>Show a native notification when dictation is complete.</p>
+            </div>
+            <Toggle
+              label="Windows notifications"
+              checked={settings.notificationsEnabled}
+              onChange={(notificationsEnabled) =>
+                persist({ ...settings, notificationsEnabled })
+              }
             />
           </div>
         </section>

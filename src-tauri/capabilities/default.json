@@ -9,6 +9,7 @@
     "clipboard-manager:default",
     "opener:default",
     "process:default",
+    "notification:default",
     "updater:default",
     "global-shortcut:default"
   ]

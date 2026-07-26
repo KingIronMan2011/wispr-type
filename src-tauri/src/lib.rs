@@ -62,8 +62,14 @@ async fn stop_native_recording(
     overlay::show(&app, "transcribing", "Turning speech into text…");
     let result = audio::stop_native_recording(app.clone(), state, output_action).await;
     match &result {
-        Ok(_) => overlay::show(&app, "success", "Done — sent to your workspace"),
-        Err(error) => overlay::show(&app, "error", error),
+        Ok(_) => {
+            overlay::show(&app, "success", "Done — sent to your workspace");
+            let _ = app::update_tray_activity(&app, "success");
+        }
+        Err(error) => {
+            overlay::show(&app, "error", error);
+            let _ = app::update_tray_activity(&app, "error");
+        }
     }
     result
 }
@@ -149,6 +155,7 @@ pub fn run() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()

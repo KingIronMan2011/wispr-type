@@ -1,4 +1,5 @@
 use crate::{
+    app::update_tray_activity,
     models::{AppSettings, AppState, Transcript},
     storage::{
         history_limit, history_path, load_history, load_settings, secure_entry, settings_path,
@@ -208,6 +209,7 @@ pub(crate) fn set_activity_state(app: AppHandle, activity: String) -> Result<(),
         tray.set_tooltip(Some(format!("Wispr Type — {label}")))
             .map_err(|err| err.to_string())?;
     }
+    update_tray_activity(&app, activity.as_str()).map_err(|err| err.to_string())?;
     if let Some(window) = app.get_webview_window("main") {
         let title = format!("Wispr Type — {label}");
         window.set_title(&title).map_err(|err| err.to_string())?;

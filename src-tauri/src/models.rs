@@ -20,10 +20,16 @@ pub(crate) struct AppSettings {
     pub(crate) start_in_tray: bool,
     #[serde(default = "default_history_retention")]
     pub(crate) history_retention: String,
+    #[serde(default = "default_notifications_enabled")]
+    pub(crate) notifications_enabled: bool,
+    pub(crate) completed_onboarding: bool,
 }
 
 fn default_history_retention() -> String {
     "15".into()
+}
+fn default_notifications_enabled() -> bool {
+    true
 }
 
 impl Default for AppSettings {
@@ -39,6 +45,8 @@ impl Default for AppSettings {
             launch_at_login: false,
             start_in_tray: false,
             history_retention: default_history_retention(),
+            notifications_enabled: true,
+            completed_onboarding: false,
         }
     }
 }
