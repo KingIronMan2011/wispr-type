@@ -36,10 +36,15 @@ pub(crate) fn save_settings(
     if settings.hotkey != existing.hotkey {
         replace_global_shortcut(&app, &settings.hotkey, &existing.hotkey)?;
     }
+    let autostart = app.autolaunch();
     if settings.launch_at_login {
-        app.autolaunch().enable().map_err(|err| err.to_string())?;
+        autostart.enable().map_err(|err| err.to_string())?;
     } else {
-        app.autolaunch().disable().map_err(|err| err.to_string())?;
+        autostart.disable().map_err(|err| err.to_string())?;
+    }
+    let registered = autostart.is_enabled().map_err(|err| err.to_string())?;
+    if registered != settings.launch_at_login {
+        return Err("Windows could not apply the launch-at-sign-in setting.".into());
     }
     write_json(settings_path(&state), &settings)
 }

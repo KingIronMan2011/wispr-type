@@ -34,6 +34,7 @@ type Settings = {
   outputAction: "paste" | "copy";
   keepRunningInTray: boolean;
   launchAtLogin: boolean;
+  startInTray: boolean;
 };
 
 type Transcript = {
@@ -41,6 +42,10 @@ type Transcript = {
   text: string;
   createdAt: string;
   language: string;
+};
+type RecordingStatus = {
+  level: number;
+  error: string | null;
 };
 const fallback: Settings = {
   hotkey: "Ctrl+Shift+Space",
@@ -51,6 +56,7 @@ const fallback: Settings = {
   outputAction: "paste",
   keepRunningInTray: true,
   launchAtLogin: false,
+  startInTray: false,
 };
 
 function displayHotkey(hotkey: string) {
@@ -145,8 +151,10 @@ export default function App() {
   const [isSavingKey, setIsSavingKey] = useState(false);
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
+  const [inputLevel, setInputLevel] = useState(0);
   const [message, setMessage] = useState("Ready when you are");
   const recordingRef = useRef(false);
+  const settingsRef = useRef<Settings>(fallback);
 
   const refresh = useCallback(async () => {
     const [saved, items, keyStatus] = await Promise.all([
@@ -154,6 +162,7 @@ export default function App() {
       invoke<Transcript[]>("get_history"),
       invoke<boolean>("has_api_key"),
     ]);
+    settingsRef.current = saved;
     setSettings(saved);
     setHistory(items);
     setHasApiKey(keyStatus);
@@ -193,25 +202,44 @@ export default function App() {
   }, [loadMicrophones]);
 
   const persist = useCallback(async (next: Settings) => {
+    settingsRef.current = next;
     setSettings(next);
     try {
       await invoke("save_settings", { settings: next });
-    } catch {
-      setMessage("Couldn’t save that setting");
+    } catch (error) {
+      setMessage(
+        typeof error === "string" ? error : "Couldn’t save that setting",
+      );
     }
+  }, []);
+
+  const cancelRecording = useCallback((reason = "Recording cancelled") => {
+    if (!recordingRef.current) return;
+    recordingRef.current = false;
+    setRecording(false);
+    setInputLevel(0);
+    setMessage(reason);
+    void invoke("cancel_native_recording").catch((error) =>
+      setMessage(
+        typeof error === "string" ? error : "Couldn’t cancel the recording",
+      ),
+    );
   }, []);
 
   const stopRecording = useCallback(() => {
     if (!recordingRef.current) return;
     recordingRef.current = false;
     setRecording(false);
+    setInputLevel(0);
     setTranscribing(true);
     setMessage("Transcribing your thought…");
-    void invoke<Transcript>("stop_native_recording")
+    void invoke<Transcript>("stop_native_recording", {
+      outputAction: settingsRef.current.outputAction,
+    })
       .then((item) => {
         setHistory((items) => [item, ...items].slice(0, 15));
         setMessage(
-          settings.outputAction === "paste"
+          settingsRef.current.outputAction === "paste"
             ? "Pasted into your active app"
             : "Copied to clipboard",
         );
@@ -224,7 +252,7 @@ export default function App() {
         ),
       )
       .finally(() => setTranscribing(false));
-  }, [settings.outputAction]);
+  }, []);
 
   const startRecording = useCallback(async () => {
     if (recordingRef.current || transcribing) return;
@@ -235,6 +263,7 @@ export default function App() {
     try {
       await invoke("start_native_recording");
       recordingRef.current = true;
+      setInputLevel(0);
       setRecording(true);
       setMessage("Listening… release when you’re done");
     } catch (error) {
@@ -260,6 +289,33 @@ export default function App() {
   }, [settings.inputMode, startRecording, stopRecording]);
 
   useEffect(() => {
+    if (!recording) {
+      setInputLevel(0);
+      return;
+    }
+    let disposed = false;
+    const pollStatus = async () => {
+      try {
+        const status = await invoke<RecordingStatus>("get_recording_status");
+        if (disposed) return;
+        setInputLevel(status.level);
+        if (status.error) {
+          cancelRecording(status.error);
+          void loadMicrophones();
+        }
+      } catch {
+        if (!disposed) cancelRecording("Couldn’t read microphone status");
+      }
+    };
+    void pollStatus();
+    const timer = window.setInterval(() => void pollStatus(), 80);
+    return () => {
+      disposed = true;
+      window.clearInterval(timer);
+    };
+  }, [cancelRecording, loadMicrophones, recording]);
+
+  useEffect(() => {
     const activity = recording
       ? "recording"
       : transcribing
@@ -282,6 +338,7 @@ export default function App() {
       event.preventDefault();
       void invoke<Settings>("set_global_shortcut", { hotkey })
         .then((next) => {
+          settingsRef.current = next;
           setSettings(next);
           setMessage(`${displayHotkey(next.hotkey)} is now active`);
         })
@@ -297,6 +354,17 @@ export default function App() {
     window.addEventListener("keydown", capture, true);
     return () => window.removeEventListener("keydown", capture, true);
   }, [capturingHotkey]);
+
+  useEffect(() => {
+    if (capturingHotkey) return;
+    const cancelWithEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || !recordingRef.current) return;
+      event.preventDefault();
+      cancelRecording("Recording cancelled");
+    };
+    window.addEventListener("keydown", cancelWithEscape, true);
+    return () => window.removeEventListener("keydown", cancelWithEscape, true);
+  }, [cancelRecording, capturingHotkey]);
 
   const saveKey = async () => {
     if (!apiKey.trim()) return;
@@ -352,6 +420,8 @@ export default function App() {
       setMessage("Update download failed. Please try again.");
     }
   };
+
+  const meterLevel = recording ? Math.max(inputLevel / 1000, 0.05) : 0.28;
 
   return (
     <main className="app-shell">
@@ -422,15 +492,28 @@ export default function App() {
             <h2>{displayHotkey(settings.hotkey)}</h2>
             <p>
               {recording
-                ? "Release to transcribe"
+                ? "Release to transcribe · Esc to cancel"
                 : settings.inputMode === "hold"
                   ? "Hold anywhere to dictate"
                   : "Press to start or stop dictation"}
             </p>
           </div>
-          <div className="audio-bars" aria-hidden="true">
+          <div
+            className={`audio-bars ${recording ? "live" : ""}`}
+            aria-label={
+              recording ? "Live microphone level" : "Microphone level"
+            }
+            role="img"
+          >
             {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => (
-              <i key={i} style={{ height: `${12 + ((i * 17) % 35)}px` }} />
+              <i
+                key={i}
+                style={{
+                  height: `${Math.round(
+                    5 + meterLevel * (11 + ((i * 17) % 31)),
+                  )}px`,
+                }}
+              />
             ))}
           </div>
         </section>
@@ -507,7 +590,7 @@ export default function App() {
             <div className="setting-row">
               <div>
                 <strong>Microphone</strong>
-                <p>Used when dictating.</p>
+                <p>Refresh after connecting or reconnecting a device.</p>
               </div>
               <Select
                 label="Microphone"
@@ -686,6 +769,19 @@ export default function App() {
                 checked={settings.launchAtLogin}
                 onChange={(launchAtLogin) =>
                   void persist({ ...settings, launchAtLogin })
+                }
+              />
+            </div>
+            <div className="setting-row">
+              <div>
+                <strong>Start in tray</strong>
+                <p>Hide the window when Wispr Type launches.</p>
+              </div>
+              <Toggle
+                label="Start in tray"
+                checked={settings.startInTray}
+                onChange={(startInTray) =>
+                  void persist({ ...settings, startInTray })
                 }
               />
             </div>

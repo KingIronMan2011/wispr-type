@@ -6,7 +6,10 @@ mod storage;
 mod transcription;
 
 use models::{AppSettings, AppState, Transcript};
-use std::{fs, sync::Mutex};
+use std::{
+    fs,
+    sync::{atomic::AtomicU32, Arc, Mutex},
+};
 use tauri::{AppHandle, Emitter, Manager, State, WindowEvent};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
@@ -23,11 +26,20 @@ fn start_native_recording(state: State<AppState>) -> Result<(), String> {
     audio::start_native_recording(state)
 }
 #[tauri::command]
+fn get_recording_status(state: State<AppState>) -> audio::RecordingStatus {
+    audio::get_recording_status(state)
+}
+#[tauri::command]
+fn cancel_native_recording(state: State<AppState>) -> Result<(), String> {
+    audio::cancel_native_recording(state)
+}
+#[tauri::command]
 async fn stop_native_recording(
     app: AppHandle,
     state: State<'_, AppState>,
+    output_action: Option<String>,
 ) -> Result<Transcript, String> {
-    audio::stop_native_recording(app, state).await
+    audio::stop_native_recording(app, state, output_action).await
 }
 #[tauri::command]
 fn save_settings(
@@ -105,6 +117,8 @@ pub fn run() {
                 data_dir: state_dir,
                 history_lock: Mutex::new(()),
                 recording: Mutex::new(None),
+                recording_level: Arc::new(AtomicU32::new(0)),
+                recording_error: Arc::new(Mutex::new(None)),
             });
             app::set_up_tray(app.handle())?;
             let mut settings = storage::load_settings(app.state::<AppState>().inner());
@@ -121,6 +135,11 @@ pub fn run() {
                 storage::settings_path(app.state::<AppState>().inner()),
                 &settings,
             )?;
+            if settings.start_in_tray {
+                if let Some(window) = app.get_webview_window("main") {
+                    window.hide()?;
+                }
+            }
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -129,6 +148,8 @@ pub fn run() {
                     if storage::load_settings(&state).keep_running_in_tray {
                         api.prevent_close();
                         let _ = window.hide();
+                    } else {
+                        window.app_handle().exit(0);
                     }
                 }
             }
@@ -137,6 +158,8 @@ pub fn run() {
             get_settings,
             get_microphones,
             start_native_recording,
+            get_recording_status,
+            cancel_native_recording,
             stop_native_recording,
             save_settings,
             set_global_shortcut,

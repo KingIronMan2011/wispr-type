@@ -1,8 +1,12 @@
 use crate::audio::NativeRecording;
 use serde::{Deserialize, Serialize};
-use std::{path::PathBuf, sync::Mutex};
+use std::{
+    path::PathBuf,
+    sync::{atomic::AtomicU32, Arc, Mutex},
+};
 
 #[derive(Clone, Serialize, Deserialize)]
+#[serde(default)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct AppSettings {
     pub(crate) hotkey: String,
@@ -13,6 +17,7 @@ pub(crate) struct AppSettings {
     pub(crate) output_action: String,
     pub(crate) keep_running_in_tray: bool,
     pub(crate) launch_at_login: bool,
+    pub(crate) start_in_tray: bool,
 }
 
 impl Default for AppSettings {
@@ -26,6 +31,7 @@ impl Default for AppSettings {
             output_action: "paste".into(),
             keep_running_in_tray: true,
             launch_at_login: false,
+            start_in_tray: false,
         }
     }
 }
@@ -49,4 +55,6 @@ pub(crate) struct AppState {
     pub(crate) data_dir: PathBuf,
     pub(crate) history_lock: Mutex<()>,
     pub(crate) recording: Mutex<Option<NativeRecording>>,
+    pub(crate) recording_level: Arc<AtomicU32>,
+    pub(crate) recording_error: Arc<Mutex<Option<String>>>,
 }

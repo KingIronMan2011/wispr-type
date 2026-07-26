@@ -25,6 +25,11 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "src-tauri -> target"
+          key: windows-x64
       - run: pnpm install --frozen-lockfile
       - uses: tauri-apps/tauri-action@v1
         env:

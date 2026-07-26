@@ -38,6 +38,7 @@ pub(crate) async fn transcribe_audio(
     state: &AppState,
     audio: Vec<u8>,
     mime_type: &str,
+    output_action: &str,
 ) -> Result<Transcript, String> {
     if audio.is_empty() {
         return Err("No audio was captured.".into());
@@ -75,7 +76,7 @@ pub(crate) async fn transcribe_audio(
     if text.is_empty() {
         return Err("No speech was detected.".into());
     }
-    paste_text(&app, &text, settings.output_action == "paste")?;
+    paste_text(&app, &text, output_action == "paste")?;
     let item = Transcript {
         id: format!("{}-{}", Utc::now().timestamp_millis(), text.len()),
         text,
