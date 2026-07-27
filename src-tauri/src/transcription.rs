@@ -102,7 +102,6 @@ pub(crate) async fn transcribe_audio(
     app: AppHandle,
     state: &AppState,
     audio: Vec<u8>,
-    mime_type: &str,
     output_action: &str,
 ) -> Result<Transcript, String> {
     if audio.is_empty() {
@@ -113,8 +112,8 @@ pub(crate) async fn transcribe_audio(
         .map_err(|_| "Add a Groq API key in Settings first.".to_string())?;
     let settings = load_settings(state);
     let part = Part::bytes(audio)
-        .file_name("wispr-type-dictation.wav")
-        .mime_str(mime_type)
+        .file_name("wispr-type-dictation.webm")
+        .mime_str("audio/webm")
         .map_err(|err| err.to_string())?;
     let mut form = Form::new()
         .part("file", part)

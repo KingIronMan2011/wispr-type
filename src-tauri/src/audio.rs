@@ -3,6 +3,7 @@ use crate::{
     platform,
     storage::load_settings,
     transcription::transcribe_audio,
+    webm_opus::encode_wav_as_webm_opus,
 };
 use chrono::Utc;
 use cpal::{
@@ -360,7 +361,16 @@ pub(crate) async fn stop_native_recording(
         }
     };
     let audio_path = trimmed_path.as_ref().unwrap_or(&recording.path);
-    let audio = fs::read(audio_path).map_err(|err| err.to_string())?;
+    let audio = match encode_wav_as_webm_opus(audio_path) {
+        Ok(audio) => audio,
+        Err(error) => {
+            let _ = fs::remove_file(&recording.path);
+            if let Some(trimmed_path) = trimmed_path {
+                let _ = fs::remove_file(trimmed_path);
+            }
+            return Err(error);
+        }
+    };
     let _ = fs::remove_file(&recording.path);
     if let Some(trimmed_path) = trimmed_path {
         let _ = fs::remove_file(trimmed_path);
@@ -368,7 +378,7 @@ pub(crate) async fn stop_native_recording(
     let output_action = output_action
         .filter(|action| matches!(action.as_str(), "paste" | "copy"))
         .unwrap_or_else(|| load_settings(&state).output_action);
-    let result = transcribe_audio(app, &state, audio.clone(), "audio/wav", &output_action).await;
+    let result = transcribe_audio(app, &state, audio.clone(), &output_action).await;
     if let Ok(mut failed_audio) = state.last_failed_audio.lock() {
         *failed_audio = result.as_ref().err().map(|_| audio);
     }
@@ -389,7 +399,7 @@ pub(crate) async fn retry_last_transcription(
     let output_action = output_action
         .filter(|action| matches!(action.as_str(), "paste" | "copy"))
         .unwrap_or_else(|| load_settings(&state).output_action);
-    let result = transcribe_audio(app, &state, audio, "audio/wav", &output_action).await;
+    let result = transcribe_audio(app, &state, audio, &output_action).await;
     if result.is_ok() {
         if let Ok(mut failed_audio) = state.last_failed_audio.lock() {
             *failed_audio = None;

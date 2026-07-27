@@ -104,14 +104,14 @@ pnpm build
 
 ### Architecture
 
-| Area          | Technology                       | Responsibility                                             |
-| ------------- | -------------------------------- | ---------------------------------------------------------- |
-| Desktop shell | Tauri v2 + Rust                  | Native integration, tray, hotkeys, updates, secure storage |
-| Recording     | CPAL + Hound                     | Native microphone capture, WAV creation, silence trimming  |
-| Transcription | Groq API                         | Whisper Large v3 / Turbo speech-to-text                    |
-| Interface     | React 19 + TypeScript 6 + Vite 8 | Settings, onboarding, history, dictation overlay           |
-| Local history | SQLite (`rusqlite`)              | Transcript persistence and retention                       |
-| Styling       | Tailwind CSS 4 + custom CSS      | Dark, compact desktop interface                            |
+| Area          | Technology                       | Responsibility                                                              |
+| ------------- | -------------------------------- | --------------------------------------------------------------------------- |
+| Desktop shell | Tauri v2 + Rust                  | Native integration, tray, hotkeys, updates, secure storage                  |
+| Recording     | CPAL + Hound + Opus              | Native microphone capture, local silence trimming, compact WebM/Opus upload |
+| Transcription | Groq API                         | Whisper Large v3 / Turbo speech-to-text                                     |
+| Interface     | React 19 + TypeScript 6 + Vite 8 | Settings, onboarding, history, dictation overlay                            |
+| Local history | SQLite (`rusqlite`)              | Transcript persistence and retention                                        |
+| Styling       | Tailwind CSS 4 + custom CSS      | Dark, compact desktop interface                                             |
 
 ## Releases
 

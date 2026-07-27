@@ -6,6 +6,7 @@ mod overlay;
 mod platform;
 mod storage;
 mod transcription;
+mod webm_opus;
 
 use models::{AppSettings, AppState, Transcript};
 use std::{
