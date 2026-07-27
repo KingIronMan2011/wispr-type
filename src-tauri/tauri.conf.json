@@ -29,7 +29,7 @@
     "targets": "all",
     "createUpdaterArtifacts": true,
     "publisher": "KingIronMan2011",
-    "homepage": "https://github.com/KingIronMan2011/veskri",
+    "homepage": "https://github.com/veskri/veskri",
     "copyright": "Copyright © 2026 KingIronMan2011",
     "license": "MIT",
     "licenseFile": "../LICENSE",
@@ -52,7 +52,7 @@
       "createUpdaterArtifacts": true,
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDRFMjNBMEE1QTI3MkM3RjUKUldUMXgzS2lwYUFqVGxaQ3lQK2FyT2U5MFYwYTc1Q2ZpK3BZT1pDSXc2eUo4RG9OKy9lZm1CRjUK",
       "endpoints": [
-        "https://github.com/KingIronMan2011/veskri/releases/latest/download/latest.json"
+        "https://github.com/veskri/veskri/releases/latest/download/latest.json"
       ],
       "windows": { "installMode": "passive" }
     }

@@ -57,7 +57,7 @@ pub(crate) fn save_settings(
     }
     if !matches!(
         settings.local_whisper_model.as_str(),
-        "tiny" | "base" | "small" | "medium"
+        "tiny" | "base" | "small" | "medium" | "large-v3-turbo" | "large-v3"
     ) {
         settings.local_whisper_model = "base".into();
     }

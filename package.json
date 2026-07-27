@@ -14,11 +14,11 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/KingIronMan2011/veskri.git"
+    "url": "git+https://github.com/veskri/veskri.git"
   },
-  "homepage": "https://github.com/KingIronMan2011/veskri#readme",
+  "homepage": "https://github.com/veskri/veskri#readme",
   "bugs": {
-    "url": "https://github.com/KingIronMan2011/veskri/issues"
+    "url": "https://github.com/veskri/veskri/issues"
   },
   "packageManager": "pnpm@11.17.0",
   "engines": {

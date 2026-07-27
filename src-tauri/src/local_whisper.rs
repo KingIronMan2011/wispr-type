@@ -27,7 +27,7 @@ struct LocalModelSpec {
     estimated_vram_mib: u32,
 }
 
-const MODELS: [LocalModelSpec; 4] = [
+const MODELS: [LocalModelSpec; 6] = [
     LocalModelSpec {
         id: "tiny",
         name: "Tiny",
@@ -75,6 +75,30 @@ const MODELS: [LocalModelSpec; 4] = [
         download_size_mib: 1_463,
         estimated_ram_mib: 3_000,
         estimated_vram_mib: 3_000,
+    },
+    LocalModelSpec {
+        id: "large-v3-turbo",
+        name: "Large v3 Turbo",
+        description: "Recommended high-quality local model. Much faster than Large v3.",
+        file_name: "ggml-large-v3-turbo.bin",
+        url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin?download=true",
+        size_bytes: 1_624_555_275,
+        sha256: "1fc70f774d38eb169993ac391eea357ef47c88757ef72ee5943879b7e8e2bc69",
+        download_size_mib: 1_550,
+        estimated_ram_mib: 3_500,
+        estimated_vram_mib: 3_500,
+    },
+    LocalModelSpec {
+        id: "large-v3",
+        name: "Large v3",
+        description: "Highest local multilingual accuracy. Best with a capable GPU.",
+        file_name: "ggml-large-v3.bin",
+        url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin?download=true",
+        size_bytes: 3_095_033_483,
+        sha256: "64d182b440b98d5203c4f9bd541544d84c605196c4f7b845dfa11fb23594d1e2",
+        download_size_mib: 2_952,
+        estimated_ram_mib: 6_000,
+        estimated_vram_mib: 6_000,
     },
 ];
 
@@ -429,10 +453,19 @@ mod tests {
     #[test]
     fn exposes_multiple_optional_local_models() {
         let models = models(&env::temp_dir());
-        assert!(models.len() >= 4);
+        assert_eq!(models.len(), 6);
+        assert!(models.iter().any(|model| model.id == "large-v3-turbo"));
+        assert!(models.iter().any(|model| model.id == "large-v3"));
         assert!(models.iter().all(|model| model.estimated_vram_mib > 0));
         assert_eq!(models[0].required_free_disk_mib, 139);
-        assert_eq!(models[3].download_size_mib, 1_463);
+        assert_eq!(
+            models
+                .iter()
+                .find(|model| model.id == "medium")
+                .expect("medium model is exposed")
+                .download_size_mib,
+            1_463
+        );
         assert!(MODELS
             .iter()
             .all(|model| required_download_space(model) > model.size_bytes));

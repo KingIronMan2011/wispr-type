@@ -41,9 +41,7 @@ jobs:
     needs: prepare-release
     strategy:
       fail-fast: false
-      # Tauri merges multi-platform updater metadata into one latest.json. Serialize
-      # uploads so a platform cannot overwrite another platform's updater entry.
-      max-parallel: 1
+      max-parallel: 4
       matrix:
         include:
           - runner: windows-latest

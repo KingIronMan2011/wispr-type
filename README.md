@@ -45,7 +45,7 @@ CI produces `.dmg` and updater artifacts for both Apple Silicon and Intel Macs. 
 
 ### Install a release
 
-1. Download the installer for your operating system from the [GitHub Releases](https://github.com/KingIronMan2011/veskri/releases) page.
+1. Download the installer for your operating system from the [GitHub Releases](https://github.com/veskri/veskri/releases) page.
 2. Install and open **Veskri**.
 3. Add a Groq API key from [console.groq.com/keys](https://console.groq.com/keys), or select Local Whisper and download a model to dictate offline.
 4. Hold `Ctrl + Shift + Space`, speak, and release to transcribe.
@@ -55,7 +55,7 @@ CI produces `.dmg` and updater artifacts for both Apple Silicon and Intel Macs. 
 For Windows, install Node.js, pnpm, Rust with the MSVC toolchain, Microsoft C++ Build Tools, CMake, LLVM/Clang (for `libclang`), and WebView2. For macOS, install Xcode Command Line Tools and CMake. For Ubuntu or Fedora, install CMake, Clang, the distribution-specific WebKitGTK, and desktop dependencies. Follow Tauri’s [platform prerequisites](https://v2.tauri.app/start/prerequisites/) before building.
 
 ```powershell
-git clone https://github.com/KingIronMan2011/veskri.git
+git clone https://github.com/veskri/veskri.git
 Set-Location veskri
 corepack enable
 pnpm install

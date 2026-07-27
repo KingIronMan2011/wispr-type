@@ -18,7 +18,8 @@ export type Settings = {
   autoInstallUpdates: boolean;
   deferredUpdateVersion: string;
   transcriptionProvider: "groq" | "local";
-  localWhisperModel: "tiny" | "base" | "small" | "medium";
+  localWhisperModel:
+    "tiny" | "base" | "small" | "medium" | "large-v3-turbo" | "large-v3";
   localWhisperAcceleration: "auto" | "cpu" | "vulkan";
 };
 

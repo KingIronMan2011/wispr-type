@@ -7,16 +7,24 @@ model download, memory use, and local CPU or GPU work.
 
 ## Choose a model
 
-Select **Local Whisper** in Settings, then download one of these multilingual
-models. The RAM and VRAM values are practical planning estimates, not hardware
-guarantees: drivers, operating systems, and audio length can change actual use.
+Select **Local Whisper** in Settings, then download one of these models. The
+RAM and VRAM values are practical planning estimates, not hardware guarantees:
+drivers, operating systems, and audio length can change actual use. `English`
+models only support English; the remaining models support multilingual
+dictation.
 
-| Model  |  Download | Free disk needed | Estimated RAM | Estimated VRAM | Best for                       |
-| ------ | --------: | ---------------: | ------------: | -------------: | ------------------------------ |
-| Tiny   |    75 MiB |          139 MiB |       350 MiB |        350 MiB | Fast, short notes              |
-| Base   |   142 MiB |          206 MiB |       550 MiB |        550 MiB | Everyday dictation             |
-| Small  |   466 MiB |          530 MiB |     1,200 MiB |      1,200 MiB | Better multilingual accuracy   |
-| Medium | 1,463 MiB |        1,527 MiB |     3,000 MiB |      3,000 MiB | Highest initial local accuracy |
+| Model          |  Download | Free disk needed | Estimated RAM | Estimated VRAM | Best for                                     |
+| -------------- | --------: | ---------------: | ------------: | -------------: | -------------------------------------------- |
+| Tiny           |    75 MiB |          139 MiB |       350 MiB |        350 MiB | Fast, short notes                            |
+| Tiny English   |    75 MiB |          139 MiB |       350 MiB |        350 MiB | Fast English-only notes                      |
+| Base           |   142 MiB |          206 MiB |       550 MiB |        550 MiB | Everyday dictation                           |
+| Base English   |   142 MiB |          206 MiB |       550 MiB |        550 MiB | Everyday English-only dictation              |
+| Small          |   466 MiB |          530 MiB |     1,200 MiB |      1,200 MiB | Better multilingual accuracy                 |
+| Small English  |   466 MiB |          530 MiB |     1,200 MiB |      1,200 MiB | Better English-only accuracy                 |
+| Medium         | 1,463 MiB |        1,527 MiB |     3,000 MiB |      3,000 MiB | High multilingual accuracy                   |
+| Medium English | 1,463 MiB |        1,527 MiB |     3,000 MiB |      3,000 MiB | High English-only accuracy                   |
+| Large v3 Turbo | 1,550 MiB |        1,614 MiB |     3,500 MiB |      3,500 MiB | Recommended high-quality local transcription |
+| Large v3       | 2,952 MiB |        3,016 MiB |     6,000 MiB |      6,000 MiB | Maximum current multilingual local accuracy  |
 
 The app checks free disk space before downloading and free RAM before starting
 local transcription. If either is insufficient, it explains the required and

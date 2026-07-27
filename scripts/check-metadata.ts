@@ -70,15 +70,15 @@ expect(
 );
 expect(
   packageJson.repository?.url ===
-    "git+https://github.com/KingIronMan2011/veskri.git",
+    "git+https://github.com/veskri/veskri.git",
   "package.json repository URL is incorrect.",
 );
 expect(
-  cargoField("repository") === "https://github.com/KingIronMan2011/veskri",
+  cargoField("repository") === "https://github.com/veskri/veskri",
   "Cargo.toml repository URL is incorrect.",
 );
 expect(
-  tauriConfig.bundle?.homepage === "https://github.com/KingIronMan2011/veskri",
+  tauriConfig.bundle?.homepage === "https://github.com/veskri/veskri",
   "Tauri bundle homepage is incorrect.",
 );
 expect(
