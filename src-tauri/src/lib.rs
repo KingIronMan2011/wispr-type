@@ -238,12 +238,6 @@ pub fn run() {
                 .app_data_dir()
                 .expect("missing app data directory");
             fs::create_dir_all(&state_dir)?;
-            if let Err(error) = storage::migrate_legacy_installation(&state_dir) {
-                log::warn!("Could not migrate legacy local data: {error}");
-            }
-            if let Err(error) = storage::migrate_legacy_api_key() {
-                log::warn!("Could not migrate the legacy API key: {error}");
-            }
             log::info!("Veskri started");
             app.manage(AppState {
                 data_dir: state_dir,

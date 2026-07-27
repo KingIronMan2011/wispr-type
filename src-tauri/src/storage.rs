@@ -4,12 +4,10 @@ use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use std::{
     fs,
-    path::{Path, PathBuf},
+    path::{PathBuf},
 };
 
 const APP_SERVICE: &str = "Veskri";
-const LEGACY_APP_SERVICE: &str = "Wispr Type";
-const LEGACY_DATA_DIRECTORY: &str = "com.wisprtype.desktop";
 const KEY_ACCOUNT: &str = "groq-api-key";
 
 pub(crate) fn settings_path(state: &AppState) -> PathBuf {
@@ -145,53 +143,12 @@ pub(crate) fn secure_entry() -> Result<Entry, String> {
     Entry::new(APP_SERVICE, KEY_ACCOUNT).map_err(|err| err.to_string())
 }
 
-pub(crate) fn migrate_legacy_installation(data_dir: &Path) -> Result<(), String> {
-    let Some(parent) = data_dir.parent() else {
-        return Ok(());
-    };
-    let legacy_dir = parent.join(LEGACY_DATA_DIRECTORY);
-    if legacy_dir == data_dir || !legacy_dir.is_dir() {
-        return Ok(());
-    }
-
-    for file_name in ["settings.json", "history.json", "history.db"] {
-        let source = legacy_dir.join(file_name);
-        let destination = data_dir.join(file_name);
-        if source.is_file() && !destination.exists() {
-            fs::copy(source, destination).map_err(|err| err.to_string())?;
-        }
-    }
-    Ok(())
-}
-
-pub(crate) fn migrate_legacy_api_key() -> Result<(), String> {
-    let current = secure_entry()?;
-    if current.get_password().is_ok() {
-        return Ok(());
-    }
-    let legacy = Entry::new(LEGACY_APP_SERVICE, KEY_ACCOUNT).map_err(|err| err.to_string())?;
-    if let Ok(api_key) = legacy.get_password() {
-        current
-            .set_password(&api_key)
-            .map_err(|err| err.to_string())?;
-    }
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::{
-        history_limit, history_path, load_history, migrate_legacy_installation, sort_history,
-        write_json,
+        history_limit, sort_history
     };
-    use crate::models::{AppSettings, AppState, Transcript};
-    use std::{
-        fs,
-        sync::{
-            atomic::{AtomicBool, AtomicU32},
-            Arc, Mutex,
-        },
-    };
+    use crate::models::{AppSettings, Transcript};
 
     fn transcript(id: &str, created_at: &str, pinned: bool) -> Transcript {
         Transcript {
@@ -217,31 +174,6 @@ mod tests {
     }
 
     #[test]
-    fn legacy_settings_are_copied_without_overwriting_current_data() {
-        let root = std::env::temp_dir().join(format!(
-            "veskri-storage-migration-test-{}",
-            std::process::id()
-        ));
-        let legacy = root.join("com.wisprtype.desktop");
-        let current = root.join("dev.kingironman.veskri");
-        fs::create_dir_all(&legacy).unwrap();
-        fs::create_dir_all(&current).unwrap();
-        fs::write(legacy.join("settings.json"), "legacy").unwrap();
-        migrate_legacy_installation(&current).unwrap();
-        assert_eq!(
-            fs::read_to_string(current.join("settings.json")).unwrap(),
-            "legacy"
-        );
-        fs::write(current.join("settings.json"), "current").unwrap();
-        migrate_legacy_installation(&current).unwrap();
-        assert_eq!(
-            fs::read_to_string(current.join("settings.json")).unwrap(),
-            "current"
-        );
-        fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
     fn pinned_transcripts_sort_before_newer_unpinned_items() {
         let mut history = vec![
             transcript("new", "2026-01-03T00:00:00Z", false),
@@ -256,34 +188,5 @@ mod tests {
                 .collect::<Vec<_>>(),
             ["pinned", "new", "older"]
         );
-    }
-
-    #[test]
-    fn legacy_json_history_is_migrated_to_sqlite() {
-        let directory =
-            std::env::temp_dir().join(format!("veskri-storage-test-{}", std::process::id()));
-        let _ = fs::remove_dir_all(&directory);
-        fs::create_dir_all(&directory).expect("create test directory");
-        let state = AppState {
-            data_dir: directory.clone(),
-            history_lock: Mutex::new(()),
-            recording: Mutex::new(None),
-            recording_level: Arc::new(AtomicU32::new(0)),
-            recording_error: Arc::new(Mutex::new(None)),
-            last_failed_audio: Mutex::new(None),
-            global_shortcut_available: AtomicBool::new(true),
-        };
-        write_json(
-            history_path(&state),
-            &vec![transcript("legacy", "2026-01-03T00:00:00Z", false)],
-        )
-        .expect("write legacy history");
-
-        let migrated = load_history(&state);
-
-        assert_eq!(migrated.len(), 1);
-        assert_eq!(migrated[0].id, "legacy");
-        assert!(!history_path(&state).exists());
-        let _ = fs::remove_dir_all(directory);
     }
 }
