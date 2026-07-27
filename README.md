@@ -39,7 +39,7 @@ X11 supports the full auto-paste workflow. On Wayland, automatic typing into ano
 
 ### macOS support
 
-CI produces `.dmg` and updater artifacts for both Apple Silicon and Intel Macs. These builds are intentionally **unsigned and not notarized** for now, so macOS will show a Gatekeeper warning before opening them. Dictation needs microphone access; auto-paste additionally needs Accessibility permission in **System Settings > Privacy & Security > Accessibility**.
+CI produces `.dmg` and updater artifacts for both Apple Silicon and Intel Macs. Veskri requires macOS 26 or newer. These builds are intentionally **unsigned and not notarized** for now, so macOS will show a Gatekeeper warning before opening them. Dictation needs microphone access; auto-paste additionally needs Accessibility permission in **System Settings > Privacy & Security > Accessibility**.
 
 ## Getting started
 
