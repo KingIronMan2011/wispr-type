@@ -406,7 +406,7 @@ export default function SettingsContent({
               className="vocabulary-input"
               defaultValue={settings.personalVocabulary}
               maxLength={650}
-              placeholder="e.g. Wispr Type, Groq, Julia, TypeScript"
+              placeholder="e.g. Wispr Type, Groq, your name, TypeScript"
               aria-label="Personal dictionary"
               onBlur={(event) => {
                 const personalVocabulary = event.target.value;
