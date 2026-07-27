@@ -186,12 +186,14 @@ export default function App() {
         await invoke("download_local_whisper_model", { id });
         await refreshLocalWhisperModels();
         setMessage("Local Whisper model is ready for offline dictation.");
+        return true;
       } catch (error) {
         setMessage(
           typeof error === "string"
             ? error
             : "Couldn’t download the local Whisper model.",
         );
+        return false;
       } finally {
         setLocalWhisperDownload(null);
       }
@@ -646,9 +648,34 @@ export default function App() {
       setIsSavingKey(false);
     }
   };
-  const completeOnboarding = async (saveKeyFirst: boolean) => {
+  const completeOnboarding = async (
+    provider: Settings["transcriptionProvider"],
+    saveKeyFirst = false,
+  ) => {
     if (saveKeyFirst && !(await saveKey())) return;
-    await persist({ ...settingsRef.current, completedOnboarding: true });
+    await persist({
+      ...settingsRef.current,
+      transcriptionProvider: provider,
+      completedOnboarding: true,
+    });
+  };
+  const completeLocalOnboarding = async (
+    modelId: Settings["localWhisperModel"],
+  ) => {
+    const model = localWhisperModels.find(
+      (candidate) => candidate.id === modelId,
+    );
+    if (!model) {
+      setMessage("Choose a Local Whisper model before continuing.");
+      return;
+    }
+    if (!model.installed && !(await downloadLocalWhisperModel(modelId))) return;
+    await persist({
+      ...settingsRef.current,
+      transcriptionProvider: "local",
+      localWhisperModel: modelId,
+      completedOnboarding: true,
+    });
   };
   const testApiKey = async () => {
     setIsTestingKey(true);
@@ -782,8 +809,15 @@ export default function App() {
         <FirstRunOnboarding
           apiKey={apiKey}
           onApiKeyChange={setApiKey}
-          onSaveAndContinue={() => void completeOnboarding(true)}
-          onContinueWithoutKey={() => void completeOnboarding(false)}
+          settings={settings}
+          localWhisperModels={localWhisperModels}
+          downloadingLocalModel={localWhisperDownload?.id ?? null}
+          localWhisperDownloadProgress={localWhisperDownload?.progress ?? null}
+          onCompleteGroq={() => void completeOnboarding("groq", true)}
+          onCompleteLocal={(id) => void completeLocalOnboarding(id)}
+          onContinueWithoutSetup={(provider) =>
+            void completeOnboarding(provider)
+          }
           saving={isSavingKey}
         />
       </>

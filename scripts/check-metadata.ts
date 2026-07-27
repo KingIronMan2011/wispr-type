@@ -69,8 +69,7 @@ expect(
   "package.json, Cargo.toml, and tauri.conf.json versions must match.",
 );
 expect(
-  packageJson.repository?.url ===
-    "git+https://github.com/veskri/veskri.git",
+  packageJson.repository?.url === "git+https://github.com/veskri/veskri.git",
   "package.json repository URL is incorrect.",
 );
 expect(

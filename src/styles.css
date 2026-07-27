@@ -102,7 +102,7 @@ body :is(a, button, input, select, textarea):focus-visible {
     #0b0b0e;
 }
 .onboarding-card {
-  width: min(440px, 100%);
+  width: min(540px, 100%);
   border: 1px solid #303037;
   border-radius: 14px;
   padding: 35px;
@@ -133,6 +133,54 @@ body :is(a, button, input, select, textarea):focus-visible {
   font-size: 13px;
   line-height: 1.5;
 }
+.onboarding-provider-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+  margin-bottom: 20px;
+}
+.onboarding-provider-options button {
+  display: flex;
+  min-height: 74px;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #3b3942;
+  border-radius: 9px;
+  color: #bcb8c6;
+  background: #121217;
+  padding: 12px;
+  text-align: left;
+}
+.onboarding-provider-options button:hover {
+  border-color: #605673;
+  color: #e8e3f1;
+}
+.onboarding-provider-options button.selected {
+  border-color: #8765c7;
+  color: #f1ebff;
+  background: linear-gradient(145deg, #2d2240, #1b1823);
+  box-shadow: inset 0 0 0 1px rgba(172, 138, 238, 0.12);
+}
+.onboarding-provider-options button > svg:last-child {
+  flex: none;
+  margin-left: auto;
+  color: #c8aaff;
+}
+.onboarding-provider-options span {
+  display: grid;
+  gap: 3px;
+}
+.onboarding-provider-options strong {
+  font-size: 12px;
+}
+.onboarding-provider-options small {
+  color: #9995a2;
+  font-size: 10px;
+  line-height: 1.35;
+}
+.onboarding-setup {
+  min-height: 176px;
+}
 .onboarding-key {
   display: grid;
   gap: 8px;
@@ -156,6 +204,50 @@ body :is(a, button, input, select, textarea):focus-visible {
 }
 .onboarding-key input:focus {
   border-color: #7958b5;
+}
+.onboarding-model-select {
+  display: grid;
+  gap: 8px;
+  color: #dddbe4;
+  font-size: 11px;
+  font-weight: 560;
+}
+.onboarding-model-select select {
+  width: 100%;
+  border: 1px solid #3c3a45;
+  border-radius: 7px;
+  outline: 0;
+  background: #121217;
+  color: #eee;
+  padding: 11px;
+  font: inherit;
+}
+.onboarding-model-select select:focus {
+  border-color: #7958b5;
+}
+.onboarding-model-details {
+  margin-top: 11px;
+  border: 1px solid #302e37;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.018);
+  padding: 10px 11px;
+}
+.onboarding-model-details p {
+  margin: 0;
+  color: #c6c1ce;
+  font-size: 11px;
+  line-height: 1.45;
+}
+.onboarding-model-details span {
+  display: block;
+  margin-top: 7px;
+  color: #9792a0;
+  font-size: 10px;
+}
+.onboarding-model-empty {
+  margin: 0;
+  color: #a5a1ac;
+  font-size: 12px;
 }
 .onboarding-primary,
 .onboarding-secondary {
@@ -194,6 +286,17 @@ body :is(a, button, input, select, textarea):focus-visible {
 .onboarding-note svg {
   flex: none;
   color: #9c84cf;
+}
+@media (max-width: 520px) {
+  .onboarding-shell {
+    padding: 18px;
+  }
+  .onboarding-card {
+    padding: 25px;
+  }
+  .onboarding-provider-options {
+    grid-template-columns: 1fr;
+  }
 }
 .app-shell {
   min-height: 100vh;
