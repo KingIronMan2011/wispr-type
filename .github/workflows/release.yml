@@ -91,8 +91,8 @@ jobs:
       - name: Install Vulkan SDK for Windows local Whisper acceleration
         if: runner.os == 'Windows'
         run: |
-          winget install --id LunarG.VulkanSDK --exact --silent --accept-package-agreements --accept-source-agreements
-          winget install --id LLVM.LLVM --exact --silent --accept-package-agreements --accept-source-agreements
+          winget install --id KhronosGroup.VulkanSDK --exact --silent --accept-package-agreements --accept-source-agreements --source winget
+          winget install --id LLVM.LLVM --exact --silent --accept-package-agreements --accept-source-agreements --source winget
           $vulkanSdk = Get-ChildItem 'C:\VulkanSDK' -Directory | Sort-Object Name -Descending | Select-Object -First 1
           if (-not $vulkanSdk) { throw 'The Vulkan SDK installation was not found.' }
           echo "VULKAN_SDK=$($vulkanSdk.FullName)" >> "$env:GITHUB_ENV"
