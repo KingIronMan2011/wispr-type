@@ -2,6 +2,7 @@ import type { Update } from "@tauri-apps/plugin-updater";
 import {
   Check,
   CircleAlert,
+  Copy,
   Cpu,
   Eye,
   EyeOff,
@@ -56,6 +57,7 @@ type Props = {
   onRemoveKey: () => void;
   onOpenGroqKeys: () => void;
   onOpenPrivacyInfo: () => void;
+  onCopyDiagnostics: () => void;
   availableUpdate: Update | null;
   isCheckingForUpdates: boolean;
   isInstallingUpdate: boolean;
@@ -99,6 +101,7 @@ export default function SettingsContent({
   onRemoveKey,
   onOpenGroqKeys,
   onOpenPrivacyInfo,
+  onCopyDiagnostics,
   availableUpdate,
   isCheckingForUpdates,
   isInstallingUpdate,
@@ -655,7 +658,7 @@ export default function SettingsContent({
           <div className="privacy-notes">
             <span>
               Dictation audio is sent to Groq only to create a transcript.
-              Veskri Type deletes its temporary audio files after processing.
+              Veskri deletes its temporary audio files after processing.
             </span>
             <span>
               Transcript history stays in a local SQLite database; your API key
@@ -678,6 +681,19 @@ export default function SettingsContent({
           >
             Read Groq’s data-processing information <ExternalLink size={13} />
           </button>
+          <div className="privacy-diagnostics">
+            <div>
+              <strong>Copy diagnostics</strong>
+              <p>
+                Share technical status for recording, microphone, or
+                transcription problems. No text, audio, logs, device names, or
+                API key is included.
+              </p>
+            </div>
+            <button type="button" onClick={onCopyDiagnostics}>
+              <Copy size={14} /> Copy diagnostics
+            </button>
+          </div>
           <div className="privacy-reset">
             <div>
               <strong>Reset local data</strong>

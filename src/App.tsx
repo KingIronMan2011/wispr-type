@@ -33,6 +33,9 @@ const DictationOverlay = lazy(() => import("./components/DictationOverlay"));
 const HistorySection = lazy(() => import("./components/HistorySection"));
 const SettingsContent = lazy(() => import("./components/SettingsContent"));
 
+type DiagnosticsContext =
+  "general" | "recording" | "microphone-check" | "transcription";
+
 export default function App() {
   if (window.location.hash === "#dictation-overlay") {
     return (
@@ -82,6 +85,8 @@ export default function App() {
   const [microphoneCheckResult, setMicrophoneCheckResult] = useState<
     string | null
   >(null);
+  const [diagnosticsContext, setDiagnosticsContext] =
+    useState<DiagnosticsContext>("general");
   const [bootstrapped, setBootstrapped] = useState(false);
   const recordingRef = useRef(false);
   const settingsRef = useRef<Settings>(fallbackSettings);
@@ -275,6 +280,7 @@ export default function App() {
     })
       .then((item) => handleTranscriptSuccess(item, outputAction))
       .catch((error) => {
+        setDiagnosticsContext("transcription");
         setMessage(
           typeof error === "string"
             ? error
@@ -301,13 +307,14 @@ export default function App() {
       outputAction,
     })
       .then((item) => handleTranscriptSuccess(item, outputAction))
-      .catch((error) =>
+      .catch((error) => {
+        setDiagnosticsContext("transcription");
         setMessage(
           typeof error === "string"
             ? error
             : "Retry failed. Check your connection and try again.",
-        ),
-      )
+        );
+      })
       .finally(() => {
         setIsRetrying(false);
         setTranscribing(false);
@@ -332,6 +339,7 @@ export default function App() {
       setRecording(true);
       setMessage("Listening… release when you’re done");
     } catch (error) {
+      setDiagnosticsContext("recording");
       setMessage(
         typeof error === "string" ? error : "Couldn’t start the microphone",
       );
@@ -360,6 +368,7 @@ export default function App() {
       setMicrophoneCheckResult(result);
       setMessage(result);
     } catch (error) {
+      setDiagnosticsContext("microphone-check");
       await invoke("cancel_native_recording").catch(() => undefined);
       const result =
         typeof error === "string"
@@ -401,6 +410,7 @@ export default function App() {
         if (disposed) return;
         setInputLevel(status.level);
         if (status.error) {
+          setDiagnosticsContext("recording");
           cancelRecording(status.error);
           void loadMicrophones();
         }
@@ -546,6 +556,16 @@ export default function App() {
       setMessage("Transcript copied to clipboard");
     } catch {
       setMessage("Couldn’t copy that transcript");
+    }
+  };
+  const copyDiagnostics = async () => {
+    try {
+      await invoke("copy_privacy_safe_diagnostics", {
+        context: diagnosticsContext,
+      });
+      setMessage("Privacy-safe diagnostics copied to clipboard");
+    } catch {
+      setMessage("Couldn’t copy diagnostics");
     }
   };
   const togglePinned = async (item: Transcript) => {
@@ -699,6 +719,7 @@ export default function App() {
                   ),
               )
             }
+            onCopyDiagnostics={() => void copyDiagnostics()}
             availableUpdate={availableUpdate}
             isCheckingForUpdates={isCheckingForUpdates}
             isInstallingUpdate={isInstallingUpdate}

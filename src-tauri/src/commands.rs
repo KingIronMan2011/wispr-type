@@ -6,6 +6,7 @@ use crate::{
         clear_history_db, history_db_path, history_limit, load_history, load_settings,
         save_history, secure_entry, settings_path, sort_history, write_json,
     },
+    transcription::copy_to_clipboard,
 };
 use serde::Serialize;
 use std::{fs, sync::atomic::Ordering, time::Duration};
@@ -129,6 +130,114 @@ pub(crate) fn delete_api_key() -> Result<(), String> {
     secure_entry()?
         .delete_credential()
         .map_err(|err| err.to_string())
+}
+
+fn diagnostic_context(context: &str) -> &'static str {
+    match context {
+        "recording" => "recording",
+        "microphone-check" => "microphone check",
+        "transcription" => "transcription",
+        _ => "general",
+    }
+}
+
+fn microphone_selection(settings: &AppSettings) -> &'static str {
+    if settings.microphone == "Default microphone" {
+        "default device"
+    } else {
+        "specific device (name redacted)"
+    }
+}
+
+fn diagnostic_model(model: &str) -> &'static str {
+    match model {
+        "whisper-large-v3" => "whisper-large-v3",
+        "whisper-large-v3-turbo" => "whisper-large-v3-turbo",
+        _ => "unknown (redacted)",
+    }
+}
+
+fn diagnostic_language(language: &str) -> &'static str {
+    match language {
+        "auto" => "auto",
+        "en" => "en",
+        "de" => "de",
+        "es" => "es",
+        "fr" => "fr",
+        _ => "unknown (redacted)",
+    }
+}
+
+fn diagnostic_output_action(output_action: &str) -> &'static str {
+    match output_action {
+        "paste" => "paste",
+        "copy" => "copy",
+        _ => "unknown (redacted)",
+    }
+}
+
+pub(crate) fn copy_privacy_safe_diagnostics(
+    app: AppHandle,
+    state: State<AppState>,
+    context: String,
+) -> Result<(), String> {
+    let settings = load_settings(&state);
+    let retry_audio_held = state
+        .last_failed_audio
+        .lock()
+        .map(|audio| audio.is_some())
+        .unwrap_or(false);
+    let recording_error_available = state
+        .recording_error
+        .lock()
+        .map(|error| error.is_some())
+        .unwrap_or(false);
+    let diagnostics = format!(
+        "Veskri privacy-safe diagnostics\n\
+         Generated (UTC): {}\n\
+         App version: {}\n\
+         Operating system: {}\n\
+         Architecture: {}\n\
+         Problem area: {}\n\
+         API key configured: {}\n\
+         Microphone selection: {}\n\
+         Transcription model: {}\n\
+         Language mode: {}\n\
+         Output mode: {}\n\
+         Auto-paste supported: {}\n\
+         Global shortcut available: {}\n\
+         Retry audio held in memory: {}\n\
+         Recording error available: {}\n\n\
+         Excluded by design: API keys, transcript text, audio, history, microphone names,\n\
+         personal dictionary entries, file paths, and application logs.\n",
+        chrono::Utc::now().to_rfc3339(),
+        env!("CARGO_PKG_VERSION"),
+        std::env::consts::OS,
+        std::env::consts::ARCH,
+        diagnostic_context(&context),
+        if has_api_key() { "yes" } else { "no" },
+        microphone_selection(&settings),
+        diagnostic_model(&settings.model),
+        diagnostic_language(&settings.language),
+        diagnostic_output_action(&settings.output_action),
+        if platform::auto_paste_supported() {
+            "yes"
+        } else {
+            "no"
+        },
+        if state.global_shortcut_available.load(Ordering::Relaxed) {
+            "yes"
+        } else {
+            "no"
+        },
+        if retry_audio_held { "yes" } else { "no" },
+        if recording_error_available {
+            "yes"
+        } else {
+            "no"
+        },
+    );
+    copy_to_clipboard(app, diagnostics)
 }
 
 #[derive(Serialize)]
@@ -323,4 +432,44 @@ pub(crate) fn reset_local_data(app: AppHandle, state: State<AppState>) -> Result
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        diagnostic_context, diagnostic_language, diagnostic_model, diagnostic_output_action,
+        microphone_selection,
+    };
+    use crate::models::AppSettings;
+
+    #[test]
+    fn diagnostics_redact_unexpected_settings_values_and_microphone_names() {
+        let mut settings = AppSettings::default();
+        settings.microphone = "Julia's private microphone".into();
+
+        assert_eq!(
+            microphone_selection(&settings),
+            "specific device (name redacted)"
+        );
+        assert_eq!(
+            diagnostic_model("custom personal value"),
+            "unknown (redacted)"
+        );
+        assert_eq!(
+            diagnostic_language("custom personal value"),
+            "unknown (redacted)"
+        );
+        assert_eq!(
+            diagnostic_output_action("custom personal value"),
+            "unknown (redacted)"
+        );
+    }
+
+    #[test]
+    fn diagnostics_accept_only_known_problem_areas() {
+        assert_eq!(diagnostic_context("recording"), "recording");
+        assert_eq!(diagnostic_context("microphone-check"), "microphone check");
+        assert_eq!(diagnostic_context("transcription"), "transcription");
+        assert_eq!(diagnostic_context("unexpected private value"), "general");
+    }
 }

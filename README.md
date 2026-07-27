@@ -115,7 +115,7 @@ pnpm build
 
 ## Releases
 
-`pnpm build` creates artifacts for the current operating system and signed updater files. The GitHub Actions release workflow publishes Windows, Linux, and unsigned macOS artifacts when a version tag is pushed.
+`pnpm build` creates artifacts for the current operating system and signed updater files. The GitHub Actions release workflow publishes Windows, Linux, and unsigned macOS artifacts when a version tag is pushed. Linux AppImage, Debian, and RPM downloads include detached GPG signatures; see the [release verification guide](docs/releasing.md#linux-gpg-release-signing).
 
 For the project’s release checklist and signing setup, see [docs/releasing.md](./docs/releasing.md).
 

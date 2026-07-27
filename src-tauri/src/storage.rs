@@ -2,10 +2,7 @@ use crate::models::{AppSettings, AppState, Transcript};
 use keyring::Entry;
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
-use std::{
-    fs,
-    path::{PathBuf},
-};
+use std::{fs, path::PathBuf};
 
 const APP_SERVICE: &str = "Veskri";
 const KEY_ACCOUNT: &str = "groq-api-key";
@@ -145,9 +142,7 @@ pub(crate) fn secure_entry() -> Result<Entry, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        history_limit, sort_history
-    };
+    use super::{history_limit, sort_history};
     use crate::models::{AppSettings, Transcript};
 
     fn transcript(id: &str, created_at: &str, pinned: bool) -> Transcript {

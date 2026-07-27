@@ -995,6 +995,44 @@ h1 {
 .privacy-link:hover {
   color: #c6abff;
 }
+.privacy-diagnostics {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-height: 78px;
+  padding: 13px 19px;
+  border-top: 1px solid #27272e;
+}
+.privacy-diagnostics strong {
+  display: block;
+  color: #dfdfe5;
+  font-size: 11px;
+  font-weight: 540;
+}
+.privacy-diagnostics p {
+  max-width: 430px;
+  margin: 4px 0 0;
+  color: #777781;
+  font-size: 9.5px;
+  line-height: 1.45;
+}
+.privacy-diagnostics button {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #3d3650;
+  border-radius: 6px;
+  background: #211f29;
+  color: #cdbcf1;
+  padding: 7px 9px;
+  font-size: 10px;
+}
+.privacy-diagnostics button:hover {
+  border-color: #745aa4;
+  background: #292335;
+}
 .privacy-reset {
   display: flex;
   align-items: center;

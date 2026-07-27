@@ -69,6 +69,7 @@ jobs:
           sudo apt-get install -y \
             build-essential \
             file \
+            gnupg \
             libasound2-dev \
             libappindicator3-dev \
             librsvg2-dev \
@@ -97,6 +98,45 @@ jobs:
           generateReleaseNotes: true
           updaterJsonPreferNsis: true
           args: ${{ matrix.args }}
+      - name: Import Linux release signing key
+        if: runner.os == 'Linux'
+        env:
+          LINUX_GPG_PRIVATE_KEY: ${{ secrets.LINUX_GPG_PRIVATE_KEY }}
+          LINUX_GPG_FINGERPRINT: BE00817976242ADAF028F67A39593B9B2D74D60A
+        run: |
+          export GNUPGHOME="$RUNNER_TEMP/veskri-gnupg"
+          install -d -m 700 "$GNUPGHOME"
+          if [ -z "$LINUX_GPG_PRIVATE_KEY" ]; then
+            echo "Missing required LINUX_GPG_PRIVATE_KEY repository secret."
+            exit 1
+          fi
+          printf '%s' "$LINUX_GPG_PRIVATE_KEY" | gpg --batch --import
+          gpg --batch --list-secret-keys --with-colons "$LINUX_GPG_FINGERPRINT" | grep -q '^sec:'
+          echo "GNUPGHOME=$GNUPGHOME" >> "$GITHUB_ENV"
+      - name: Sign and upload Linux release artifacts
+        if: runner.os == 'Linux'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LINUX_GPG_PASSPHRASE: ${{ secrets.LINUX_GPG_PASSPHRASE }}
+          LINUX_GPG_FINGERPRINT: BE00817976242ADAF028F67A39593B9B2D74D60A
+          RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
+        run: |
+          trap 'gpgconf --kill gpg-agent || true; rm -rf "$GNUPGHOME"' EXIT
+          mapfile -d '' artifacts < <(find src-tauri/target/release/bundle -type f \( -name '*.AppImage' -o -name '*.deb' -o -name '*.rpm' \) -print0)
+          if [ "${#artifacts[@]}" -eq 0 ]; then
+            echo "No Linux release artifacts were found."
+            exit 1
+          fi
+          for artifact in "${artifacts[@]}"; do
+            gpg --batch --yes --pinentry-mode loopback \
+              --passphrase "$LINUX_GPG_PASSPHRASE" \
+              --local-user "$LINUX_GPG_FINGERPRINT" \
+              --armor --detach-sign \
+              --output "${artifact}.asc" \
+              "$artifact"
+          done
+          signatures=("${artifacts[@]/%/.asc}")
+          gh release upload "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --clobber "${signatures[@]}"
 
   publish-release:
     needs: release

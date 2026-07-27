@@ -190,6 +190,14 @@ fn reset_local_data(app: AppHandle, state: State<AppState>) -> Result<(), String
 fn copy_to_clipboard(app: AppHandle, text: String) -> Result<(), String> {
     transcription::copy_to_clipboard(app, text)
 }
+#[tauri::command]
+fn copy_privacy_safe_diagnostics(
+    app: AppHandle,
+    state: State<AppState>,
+    context: String,
+) -> Result<(), String> {
+    commands::copy_privacy_safe_diagnostics(app, state, context)
+}
 
 pub fn run() {
     tauri::Builder::default()
@@ -324,7 +332,8 @@ pub fn run() {
             update_history_item,
             set_history_pinned,
             reset_local_data,
-            copy_to_clipboard
+            copy_to_clipboard,
+            copy_privacy_safe_diagnostics
         ])
         .run(tauri::generate_context!())
         .expect("error while running Veskri");
