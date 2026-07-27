@@ -15,7 +15,23 @@ permissions:
 
 jobs:
   release:
-    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-latest
+            cache_key: windows-x64
+            args: ""
+          - runner: ubuntu-latest
+            cache_key: linux-x64
+            args: "--bundles appimage,deb,rpm"
+          - runner: macos-15-intel
+            cache_key: macos-intel
+            args: "--bundles app,dmg --no-sign"
+          - runner: macos-15
+            cache_key: macos-arm64
+            args: "--bundles app,dmg --no-sign"
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -25,11 +41,26 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install Linux system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            file \
+            libappindicator3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libwebkit2gtk-4.1-dev \
+            libxdo-dev \
+            patchelf \
+            rpm
       - name: Cache Rust build
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: "src-tauri -> target"
-          key: windows-x64
+          key: ${{ matrix.cache_key }}
       - run: pnpm install --frozen-lockfile
       - uses: tauri-apps/tauri-action@v1
         env:
@@ -39,8 +70,9 @@ jobs:
         with:
           tagName: ${{ inputs.release_tag || github.ref_name }}
           releaseName: "Wispr Type ${{ inputs.release_tag || github.ref_name }}"
-          releaseBody: "Windows installer and signed in-app updater package."
+          releaseBody: "Windows and Linux installers, plus unsigned macOS builds for Apple Silicon and Intel. All in-app updater packages are signed."
           releaseDraft: false
           prerelease: false
           generateReleaseNotes: true
           updaterJsonPreferNsis: true
+          args: ${{ matrix.args }}

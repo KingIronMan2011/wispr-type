@@ -3,13 +3,17 @@ mod audio;
 mod commands;
 mod models;
 mod overlay;
+mod platform;
 mod storage;
 mod transcription;
 
 use models::{AppSettings, AppState, Transcript};
 use std::{
     fs,
-    sync::{atomic::AtomicU32, Arc, Mutex},
+    sync::{
+        atomic::{AtomicBool, AtomicU32, Ordering},
+        Arc, Mutex,
+    },
 };
 use tauri::{AppHandle, Emitter, Manager, State, WindowEvent};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
@@ -21,6 +25,10 @@ fn get_settings(state: State<AppState>) -> AppSettings {
 #[tauri::command]
 fn get_microphones() -> Result<Vec<audio::AudioDevice>, String> {
     audio::get_microphones()
+}
+#[tauri::command]
+fn get_platform_capabilities(state: State<AppState>) -> platform::PlatformCapabilities {
+    platform::capabilities(state.global_shortcut_available.load(Ordering::Relaxed))
 }
 #[tauri::command]
 fn start_native_recording(app: AppHandle, state: State<AppState>) -> Result<(), String> {
@@ -237,19 +245,34 @@ pub fn run() {
                 recording_level: Arc::new(AtomicU32::new(0)),
                 recording_error: Arc::new(Mutex::new(None)),
                 last_failed_audio: Mutex::new(None),
+                global_shortcut_available: AtomicBool::new(true),
             });
             app::set_up_tray(app.handle())?;
             overlay::create(app.handle())?;
             let mut settings = storage::load_settings(app.state::<AppState>().inner());
             settings.hotkey = settings.hotkey.replace(' ', "");
-            if app
+            let shortcut_registered = if app
                 .global_shortcut()
                 .register(settings.hotkey.as_str())
-                .is_err()
+                .is_ok()
             {
+                true
+            } else {
                 settings.hotkey = AppSettings::default().hotkey;
-                app.global_shortcut().register(settings.hotkey.as_str())?;
-            }
+                if app
+                    .global_shortcut()
+                    .register(settings.hotkey.as_str())
+                    .is_err()
+                {
+                    log::warn!("Global shortcuts are unavailable in this desktop session");
+                    false
+                } else {
+                    true
+                }
+            };
+            app.state::<AppState>()
+                .global_shortcut_available
+                .store(shortcut_registered, Ordering::Relaxed);
             storage::write_json(
                 storage::settings_path(app.state::<AppState>().inner()),
                 &settings,
@@ -279,6 +302,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_settings,
             get_microphones,
+            get_platform_capabilities,
             start_native_recording,
             start_microphone_check,
             get_recording_status,

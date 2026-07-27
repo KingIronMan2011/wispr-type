@@ -29,6 +29,14 @@ export type RecordingStatus = {
   error: string | null;
 };
 
+export type PlatformCapabilities = {
+  os: string;
+  displayName: string;
+  session: string;
+  autoPasteSupported: boolean;
+  globalShortcutSupported: boolean;
+};
+
 export type OverlayPayload = {
   state: "listening" | "transcribing" | "success" | "error";
   message: string;
@@ -55,6 +63,14 @@ export const fallbackSettings: Settings = {
   voiceCommandsEnabled: false,
   textMode: "literal",
   personalVocabulary: "",
+};
+
+export const fallbackPlatformCapabilities: PlatformCapabilities = {
+  os: "windows",
+  displayName: "Windows",
+  session: "native",
+  autoPasteSupported: true,
+  globalShortcutSupported: true,
 };
 
 export function displayHotkey(hotkey: string) {

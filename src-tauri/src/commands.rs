@@ -1,13 +1,14 @@
 use crate::{
     app::update_tray_activity,
     models::{AppSettings, AppState, Transcript},
+    platform,
     storage::{
         clear_history_db, history_db_path, history_limit, load_history, load_settings,
         save_history, secure_entry, settings_path, sort_history, write_json,
     },
 };
 use serde::Serialize;
-use std::{fs, time::Duration};
+use std::{fs, sync::atomic::Ordering, time::Duration};
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_autostart::ManagerExt as AutostartExt;
 use tauri_plugin_global_shortcut::GlobalShortcutExt;
@@ -68,7 +69,9 @@ pub(crate) fn save_settings(
         }
         let registered = autostart.is_enabled().map_err(|err| err.to_string())?;
         if registered != settings.launch_at_login {
-            return Err("Windows could not apply the launch-at-sign-in setting.".into());
+            return Err(
+                "The operating system could not apply the launch-at-sign-in setting.".into(),
+            );
         }
     }
     write_json(settings_path(&state), &settings)?;
@@ -97,6 +100,9 @@ pub(crate) fn set_global_shortcut(
     let mut settings = load_settings(&state);
     let next_hotkey = normalized_hotkey(&hotkey);
     replace_global_shortcut(&app, &next_hotkey, &settings.hotkey)?;
+    state
+        .global_shortcut_available
+        .store(true, Ordering::Relaxed);
     settings.hotkey = next_hotkey;
     write_json(settings_path(&state), &settings)?;
     Ok(settings)
@@ -112,9 +118,12 @@ pub(crate) fn save_api_key(api_key: String) -> Result<(), String> {
     if !api_key.starts_with("gsk_") {
         return Err("That doesn't look like a Groq API key.".into());
     }
-    secure_entry()?
-        .set_password(api_key)
-        .map_err(|err| format!("Windows Credential Manager could not save the key: {err}"))
+    secure_entry()?.set_password(api_key).map_err(|err| {
+        format!(
+            "{} could not save the key: {err}",
+            platform::credential_store_name()
+        )
+    })
 }
 pub(crate) fn delete_api_key() -> Result<(), String> {
     secure_entry()?
@@ -296,7 +305,12 @@ pub(crate) fn reset_local_data(app: AppHandle, state: State<AppState>) -> Result
     let _ = autostart.disable();
     let shortcuts = app.global_shortcut();
     let _ = shortcuts.unregister_all();
-    let _ = shortcuts.register(AppSettings::default().hotkey.as_str());
+    let shortcut_registered = shortcuts
+        .register(AppSettings::default().hotkey.as_str())
+        .is_ok();
+    state
+        .global_shortcut_available
+        .store(shortcut_registered, Ordering::Relaxed);
     let _ =
         secure_entry().and_then(|entry| entry.delete_credential().map_err(|err| err.to_string()));
     let _ = fs::remove_file(settings_path(&state));

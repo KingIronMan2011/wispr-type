@@ -19,7 +19,6 @@
         "minWidth": 960,
         "minHeight": 680,
         "resizable": true,
-        "decorations": false,
         "center": true
       }
     ],
@@ -29,7 +28,7 @@
     "active": true,
     "targets": "all",
     "createUpdaterArtifacts": true,
-    "icon": ["icons/icon.png", "icons/icon.ico"],
+    "icon": ["icons/icon.png", "icons/icon.ico", "icons/icon.icns"],
     "windows": { "wix": { "language": "en-US" } }
   },
   "plugins": {

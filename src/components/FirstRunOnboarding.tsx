@@ -63,8 +63,8 @@ export default function FirstRunOnboarding({
           Set up later
         </button>
         <div className="onboarding-note">
-          <ShieldCheck size={15} /> Your key is stored in Windows Credential
-          Manager, never in the app settings.
+          <ShieldCheck size={15} /> Your key is stored in secure
+          operating-system storage, never in the app settings.
         </div>
       </section>
     </main>

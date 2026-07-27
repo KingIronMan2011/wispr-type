@@ -2,7 +2,7 @@
 
 ![Wispr Type — Fast voice-to-text that stays out of your way](./docs/banner.png)
 
-**A fast, privacy-minded desktop dictation app for Windows.**
+**A fast, privacy-minded desktop dictation app for Windows, macOS, and Linux.**
 
 Hold a shortcut, speak naturally, and have your text copied or pasted into the app you are already using.
 
@@ -10,7 +10,7 @@ Hold a shortcut, speak naturally, and have your text copied or pasted into the a
 
 ## Why Wispr Type?
 
-Wispr Type is an open-source, Windows-first desktop app for fast dictation. It pairs a focused, Linear-inspired settings experience with native Rust audio recording and Groq's Whisper transcription models.
+Wispr Type is an open-source desktop app for fast dictation on Windows, macOS, and Linux. It pairs a focused, Linear-inspired settings experience with native Rust audio recording and Groq's Whisper transcription models.
 
 The app runs quietly in the system tray, works from any application, and keeps the workflow intentionally simple: dictate, transcribe, continue writing.
 
@@ -30,18 +30,28 @@ The app runs quietly in the system tray, works from any application, and keeps t
 - A retry action for transient transcription failures; failed audio stays in memory only until success or app exit
 - System tray controls, launch-at-sign-in, start-in-tray, native notifications, updates, logging, and single-instance protection
 
+### Linux support
+
+Ubuntu and Fedora packages are built in CI as `.deb`, `.rpm`, and AppImage artifacts. Audio recording, secure key storage, history, and copy-to-clipboard work across the supported Linux desktop environments.
+
+X11 supports the full auto-paste workflow. On Wayland, automatic typing into another application is intentionally blocked by many desktop environments. Wispr Type detects this and uses a reliable clipboard fallback, so you can paste with your normal desktop shortcut.
+
+### macOS support
+
+CI produces `.dmg` and updater artifacts for both Apple Silicon and Intel Macs. These builds are intentionally **unsigned and not notarized** for now, so macOS will show a Gatekeeper warning before opening them. Dictation needs microphone access; auto-paste additionally needs Accessibility permission in **System Settings > Privacy & Security > Accessibility**.
+
 ## Getting started
 
 ### Install a release
 
-1. Download the latest Windows installer from the [GitHub Releases](https://github.com/KingIronMan2011/wispr-type/releases) page.
+1. Download the installer for your operating system from the [GitHub Releases](https://github.com/KingIronMan2011/wispr-type/releases) page.
 2. Install and open **Wispr Type**.
 3. Create a Groq API key at [console.groq.com/keys](https://console.groq.com/keys), then add it during onboarding.
 4. Hold `Ctrl + Shift + Space`, speak, and release to transcribe.
 
 ### Build from source
 
-Windows development requires Node.js, pnpm, Rust with the MSVC toolchain, Microsoft C++ Build Tools, and WebView2. Follow Tauri’s [Windows prerequisites](https://v2.tauri.app/start/prerequisites/) if any of these are missing.
+For Windows, install Node.js, pnpm, Rust with the MSVC toolchain, Microsoft C++ Build Tools, and WebView2. For macOS, install Xcode Command Line Tools. For Ubuntu or Fedora, install the distribution-specific WebKitGTK and desktop dependencies. Follow Tauri’s [platform prerequisites](https://v2.tauri.app/start/prerequisites/) before building.
 
 ```powershell
 git clone https://github.com/KingIronMan2011/wispr-type.git
@@ -57,7 +67,7 @@ The first run can be completed without an API key, but dictation requires one.
 
 Wispr Type is designed to make its local data handling clear:
 
-- Your Groq API key is stored in **Windows Credential Manager**, not in the settings file or transcript history.
+- Your Groq API key is stored in the operating system credential store (Windows Credential Manager, macOS Keychain, or a Linux keyring), not in the settings file or transcript history.
 - Dictation audio is written to a temporary local file only while it is being recorded and then removed after processing.
 - If transcription fails, the recording is retained **only in memory** to make retrying possible. It is cleared after success or when the app exits.
 - Transcript history is stored locally in SQLite and can be disabled or cleared from Settings.
@@ -88,24 +98,24 @@ pnpm test:e2e
 pnpm test:rust
 pnpm test:all
 
-# Create Windows installers
+# Create native installers for the current operating system
 pnpm build
 ```
 
 ### Architecture
 
-| Area          | Technology                       | Responsibility                                              |
-| ------------- | -------------------------------- | ----------------------------------------------------------- |
-| Desktop shell | Tauri v2 + Rust                  | Windows integration, tray, hotkeys, updates, secure storage |
-| Recording     | CPAL + Hound                     | Native microphone capture, WAV creation, silence trimming   |
-| Transcription | Groq API                         | Whisper Large v3 / Turbo speech-to-text                     |
-| Interface     | React 19 + TypeScript 6 + Vite 8 | Settings, onboarding, history, dictation overlay            |
-| Local history | SQLite (`rusqlite`)              | Transcript persistence and retention                        |
-| Styling       | Tailwind CSS 4 + custom CSS      | Dark, compact desktop interface                             |
+| Area          | Technology                       | Responsibility                                             |
+| ------------- | -------------------------------- | ---------------------------------------------------------- |
+| Desktop shell | Tauri v2 + Rust                  | Native integration, tray, hotkeys, updates, secure storage |
+| Recording     | CPAL + Hound                     | Native microphone capture, WAV creation, silence trimming  |
+| Transcription | Groq API                         | Whisper Large v3 / Turbo speech-to-text                    |
+| Interface     | React 19 + TypeScript 6 + Vite 8 | Settings, onboarding, history, dictation overlay           |
+| Local history | SQLite (`rusqlite`)              | Transcript persistence and retention                       |
+| Styling       | Tailwind CSS 4 + custom CSS      | Dark, compact desktop interface                            |
 
 ## Releases
 
-`pnpm build` creates Windows installer artifacts and signed updater files. The GitHub Actions release workflow publishes the artifacts when a version tag is pushed.
+`pnpm build` creates artifacts for the current operating system and signed updater files. The GitHub Actions release workflow publishes Windows, Linux, and unsigned macOS artifacts when a version tag is pushed.
 
 For the project’s release checklist and signing setup, see [docs/releasing.md](./docs/releasing.md).
 

@@ -15,6 +15,7 @@ src-tauri/target/
 # Release signing material (never commit the private updater key)
 wispr-type-updater.key
 wispr-type-updater.key.pub
+wispr-type-linux-pub-key.asc
 
 # Local environment and credentials
 .env

@@ -17,13 +17,14 @@ import {
   sendNotification,
 } from "@tauri-apps/plugin-notification";
 import FirstRunOnboarding from "./components/FirstRunOnboarding";
-import WindowControls from "./components/WindowControls";
 import Sidebar from "./components/Sidebar";
 import {
   fallbackSettings,
+  fallbackPlatformCapabilities,
   hotkeyFromEvent,
   type ApiKeyTestResult,
   type RecordingStatus,
+  type PlatformCapabilities,
   type Settings,
   type Transcript,
 } from "./types";
@@ -65,6 +66,8 @@ export default function App() {
   const [microphones, setMicrophones] = useState<
     { value: string; label: string }[]
   >([{ value: "Default microphone", label: "Default microphone" }]);
+  const [platformCapabilities, setPlatformCapabilities] =
+    useState<PlatformCapabilities>(fallbackPlatformCapabilities);
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const [inputLevel, setInputLevel] = useState(0);
@@ -81,15 +84,19 @@ export default function App() {
   const settingsSaveVersion = useRef(0);
 
   const refresh = useCallback(async () => {
-    const [saved, items, keyStatus] = await Promise.all([
+    const [saved, items, keyStatus, capabilities] = await Promise.all([
       invoke<Settings>("get_settings"),
       invoke<Transcript[]>("get_history"),
       invoke<boolean>("has_api_key"),
+      invoke<PlatformCapabilities | null>("get_platform_capabilities").catch(
+        () => null,
+      ),
     ]);
     settingsRef.current = saved;
     setSettings(saved);
     setHistory(items);
     setHasApiKey(keyStatus);
+    setPlatformCapabilities(capabilities ?? fallbackPlatformCapabilities);
     setBootstrapped(true);
   }, []);
 
@@ -138,7 +145,7 @@ export default function App() {
         await invoke<{ value: string; label: string }[]>("get_microphones"),
       );
     } catch {
-      setMessage("Couldn’t read the Windows microphone list");
+      setMessage("Couldn’t read the system microphone list");
     }
   }, []);
   useEffect(() => {
@@ -182,41 +189,46 @@ export default function App() {
     );
   }, []);
 
-  const handleTranscriptSuccess = useCallback((item: Transcript) => {
-    setCanRetry(false);
-    void invoke<Transcript[]>("get_history")
-      .then(setHistory)
-      .catch(() => {
-        if (settingsRef.current.historyRetention === "never") setHistory([]);
-        else
-          setHistory((items) =>
-            [item, ...items].slice(
-              0,
-              Number(settingsRef.current.historyRetention),
-            ),
-          );
-      });
-    setMessage(
-      settingsRef.current.outputAction === "paste"
-        ? "Pasted into your active app"
-        : "Copied to clipboard",
-    );
-    void (async () => {
-      if (!settingsRef.current.notificationsEnabled) return;
-      try {
-        let granted = await isPermissionGranted();
-        if (!granted) granted = (await requestPermission()) === "granted";
-        if (granted) {
-          sendNotification({
-            title: "Wispr Type",
-            body: "Dictation is ready.",
-          });
+  const handleTranscriptSuccess = useCallback(
+    (item: Transcript, outputAction: Settings["outputAction"]) => {
+      setCanRetry(false);
+      void invoke<Transcript[]>("get_history")
+        .then(setHistory)
+        .catch(() => {
+          if (settingsRef.current.historyRetention === "never") setHistory([]);
+          else
+            setHistory((items) =>
+              [item, ...items].slice(
+                0,
+                Number(settingsRef.current.historyRetention),
+              ),
+            );
+        });
+      setMessage(
+        outputAction === "paste"
+          ? "Pasted into your active app"
+          : platformCapabilities.autoPasteSupported
+            ? "Copied to clipboard"
+            : "Copied to clipboard — auto-paste isn’t available in this Wayland session.",
+      );
+      void (async () => {
+        if (!settingsRef.current.notificationsEnabled) return;
+        try {
+          let granted = await isPermissionGranted();
+          if (!granted) granted = (await requestPermission()) === "granted";
+          if (granted) {
+            sendNotification({
+              title: "Wispr Type",
+              body: "Dictation is ready.",
+            });
+          }
+        } catch {
+          // Notification permissions must never interrupt dictation.
         }
-      } catch {
-        // Notification permissions must never interrupt dictation.
-      }
-    })();
-  }, []);
+      })();
+    },
+    [platformCapabilities.autoPasteSupported],
+  );
 
   const stopRecording = useCallback(() => {
     if (!recordingRef.current) return;
@@ -225,10 +237,15 @@ export default function App() {
     setInputLevel(0);
     setTranscribing(true);
     setMessage("Transcribing your thought…");
+    const outputAction =
+      settingsRef.current.outputAction === "paste" &&
+      !platformCapabilities.autoPasteSupported
+        ? "copy"
+        : settingsRef.current.outputAction;
     void invoke<Transcript>("stop_native_recording", {
-      outputAction: settingsRef.current.outputAction,
+      outputAction,
     })
-      .then(handleTranscriptSuccess)
+      .then((item) => handleTranscriptSuccess(item, outputAction))
       .catch((error) => {
         setMessage(
           typeof error === "string"
@@ -240,17 +257,22 @@ export default function App() {
           .catch(() => setCanRetry(false));
       })
       .finally(() => setTranscribing(false));
-  }, [handleTranscriptSuccess]);
+  }, [handleTranscriptSuccess, platformCapabilities.autoPasteSupported]);
 
   const retryLastTranscription = useCallback(() => {
     if (isRetrying || recordingRef.current || transcribing) return;
     setIsRetrying(true);
     setTranscribing(true);
     setMessage("Retrying your dictation…");
+    const outputAction =
+      settingsRef.current.outputAction === "paste" &&
+      !platformCapabilities.autoPasteSupported
+        ? "copy"
+        : settingsRef.current.outputAction;
     void invoke<Transcript>("retry_last_transcription", {
-      outputAction: settingsRef.current.outputAction,
+      outputAction,
     })
-      .then(handleTranscriptSuccess)
+      .then((item) => handleTranscriptSuccess(item, outputAction))
       .catch((error) =>
         setMessage(
           typeof error === "string"
@@ -262,7 +284,12 @@ export default function App() {
         setIsRetrying(false);
         setTranscribing(false);
       });
-  }, [handleTranscriptSuccess, isRetrying, transcribing]);
+  }, [
+    handleTranscriptSuccess,
+    isRetrying,
+    platformCapabilities.autoPasteSupported,
+    transcribing,
+  ]);
 
   const startRecording = useCallback(async () => {
     if (recordingRef.current || transcribing || isCheckingMicrophone) return;
@@ -301,7 +328,7 @@ export default function App() {
       const result =
         highestLevel >= 20
           ? "Microphone detected your voice. It is ready to dictate."
-          : "No speech level was detected. Check the selected microphone and Windows privacy settings.";
+          : "No speech level was detected. Check the selected microphone and system privacy settings.";
       setMicrophoneCheckResult(result);
       setMessage(result);
     } catch (error) {
@@ -464,7 +491,7 @@ export default function App() {
     try {
       await invoke("delete_api_key");
       setHasApiKey(false);
-      setMessage("Groq API key removed from Windows Credential Manager");
+      setMessage("Groq API key removed from secure system storage");
     } catch {
       setMessage("Couldn’t remove the API key");
     } finally {
@@ -566,7 +593,6 @@ export default function App() {
   if (!settings.completedOnboarding) {
     return (
       <>
-        <WindowControls />
         <FirstRunOnboarding
           apiKey={apiKey}
           onApiKeyChange={setApiKey}
@@ -580,7 +606,6 @@ export default function App() {
 
   return (
     <main className="app-shell">
-      <WindowControls />
       <Sidebar
         activeSection={activeSection}
         historyCount={history.length}
@@ -594,6 +619,7 @@ export default function App() {
             transcribing={transcribing}
             inputLevel={inputLevel}
             message={message}
+            platformCapabilities={platformCapabilities}
             canRetry={canRetry}
             isRetrying={isRetrying}
             isCheckingMicrophone={isCheckingMicrophone}

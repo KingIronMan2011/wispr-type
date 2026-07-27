@@ -2,7 +2,10 @@ use crate::audio::NativeRecording;
 use serde::{Deserialize, Serialize};
 use std::{
     path::PathBuf,
-    sync::{atomic::AtomicU32, Arc, Mutex},
+    sync::{
+        atomic::{AtomicBool, AtomicU32},
+        Arc, Mutex,
+    },
 };
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -87,4 +90,5 @@ pub(crate) struct AppState {
     pub(crate) recording_level: Arc<AtomicU32>,
     pub(crate) recording_error: Arc<Mutex<Option<String>>>,
     pub(crate) last_failed_audio: Mutex<Option<Vec<u8>>>,
+    pub(crate) global_shortcut_available: AtomicBool,
 }

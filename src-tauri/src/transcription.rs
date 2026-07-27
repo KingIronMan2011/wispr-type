@@ -1,11 +1,12 @@
 use crate::{
     models::{AppState, GroqResponse, Transcript},
+    platform,
     storage::{
         history_limit, load_history, load_settings, save_history, secure_entry, sort_history,
     },
 };
 use chrono::Utc;
-use enigo::{Direction, Enigo, Key, Keyboard, Settings as EnigoSettings};
+use enigo::{Enigo, Keyboard, Settings as EnigoSettings};
 use reqwest::multipart::{Form, Part};
 use tauri::AppHandle;
 use tauri_plugin_clipboard_manager::ClipboardExt;
@@ -70,19 +71,22 @@ fn polish_text(text: String) -> String {
 }
 
 fn paste_text(app: &AppHandle, text: &str, should_paste: bool) -> Result<(), String> {
-    app.clipboard()
-        .write_text(text)
-        .map_err(|err| err.to_string())?;
-    if should_paste {
-        let mut enigo = Enigo::new(&EnigoSettings::default()).map_err(|err| err.to_string())?;
-        enigo
-            .key(Key::Control, Direction::Press)
-            .map_err(|err| err.to_string())?;
-        enigo
-            .key(Key::Unicode('v'), Direction::Click)
-            .map_err(|err| err.to_string())?;
-        enigo
-            .key(Key::Control, Direction::Release)
+    if should_paste && platform::auto_paste_supported() {
+        let mut enigo = Enigo::new(&EnigoSettings::default()).map_err(|err| {
+            format!(
+                "Could not prepare auto-paste: {err}. {}",
+                platform::auto_paste_permission_hint()
+            )
+        })?;
+        enigo.text(text).map_err(|err| {
+            format!(
+                "Could not auto-paste: {err}. {}",
+                platform::auto_paste_permission_hint()
+            )
+        })?;
+    } else {
+        app.clipboard()
+            .write_text(text)
             .map_err(|err| err.to_string())?;
     }
     Ok(())

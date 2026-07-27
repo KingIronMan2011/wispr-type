@@ -146,7 +146,10 @@ mod tests {
     use crate::models::{AppSettings, AppState, Transcript};
     use std::{
         fs,
-        sync::{atomic::AtomicU32, Arc, Mutex},
+        sync::{
+            atomic::{AtomicBool, AtomicU32},
+            Arc, Mutex,
+        },
     };
 
     fn transcript(id: &str, created_at: &str, pinned: bool) -> Transcript {
@@ -202,6 +205,7 @@ mod tests {
             recording_level: Arc::new(AtomicU32::new(0)),
             recording_error: Arc::new(Mutex::new(None)),
             last_failed_audio: Mutex::new(None),
+            global_shortcut_available: AtomicBool::new(true),
         };
         write_json(
             history_path(&state),

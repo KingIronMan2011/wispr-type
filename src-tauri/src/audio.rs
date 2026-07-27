@@ -1,5 +1,6 @@
 use crate::{
     models::{AppState, Transcript},
+    platform,
     storage::load_settings,
     transcription::transcribe_audio,
 };
@@ -35,8 +36,8 @@ pub(crate) struct NativeRecording {
     path: PathBuf,
 }
 
-// Windows/WASAPI is the sole current target. CPAL's platform wrapper is
-// conservatively non-Send despite Windows streams being safe in app state.
+// CPAL's platform wrapper is conservatively non-Send even though the native
+// streams are managed by the application state for the supported desktop targets.
 unsafe impl Send for NativeRecording {}
 
 #[derive(Serialize)]
@@ -213,7 +214,8 @@ pub(crate) fn get_microphones() -> Result<Vec<AudioDevice>, String> {
     }];
     for device in host.input_devices().map_err(|err| {
         format!(
-            "Windows couldn’t enumerate microphones: {err}. Check Settings > Privacy & security > Microphone."
+            "Couldn’t enumerate microphones: {err}. {}",
+            platform::microphone_permission_hint()
         )
     })? {
         if let Ok(name) = device.name() {
@@ -253,8 +255,10 @@ pub(crate) fn start_native_recording(state: State<AppState>) -> Result<(), Strin
     let host = cpal::default_host();
     let device = if settings.microphone == "Default microphone" {
         host.default_input_device().ok_or_else(|| {
-            "No microphone is available. Connect one and make sure Windows allows desktop apps to use the microphone."
-                .to_string()
+            format!(
+                "No microphone is available. Connect one and make sure desktop apps can use it. {}",
+                platform::microphone_permission_hint()
+            )
         })?
     } else {
         host.input_devices()
@@ -269,13 +273,12 @@ pub(crate) fn start_native_recording(state: State<AppState>) -> Result<(), Strin
                 )
             })?
     };
-    let config = device
-        .default_input_config()
-        .map_err(|err| {
-            format!(
-                "Couldn’t open the microphone: {err}. Check Windows Settings > Privacy & security > Microphone."
-            )
-        })?;
+    let config = device.default_input_config().map_err(|err| {
+        format!(
+            "Couldn’t open the microphone: {err}. {}",
+            platform::microphone_permission_hint()
+        )
+    })?;
     let path = state
         .data_dir
         .join(format!("capture-{}.wav", Utc::now().timestamp_millis()));

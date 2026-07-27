@@ -17,7 +17,12 @@ import {
   Trash2,
 } from "lucide-react";
 import { Select, Toggle } from "./Controls";
-import { displayHotkey, type ApiKeyTestResult, type Settings } from "../types";
+import {
+  displayHotkey,
+  type ApiKeyTestResult,
+  type PlatformCapabilities,
+  type Settings,
+} from "../types";
 
 type Props = {
   settings: Settings;
@@ -25,6 +30,7 @@ type Props = {
   transcribing: boolean;
   inputLevel: number;
   message: string;
+  platformCapabilities: PlatformCapabilities;
   canRetry: boolean;
   isRetrying: boolean;
   isCheckingMicrophone: boolean;
@@ -64,6 +70,7 @@ export default function SettingsContent({
   transcribing,
   inputLevel,
   message,
+  platformCapabilities,
   canRetry,
   isRetrying,
   isCheckingMicrophone,
@@ -187,7 +194,12 @@ export default function SettingsContent({
           <div className="setting-row">
             <div>
               <strong>Shortcut</strong>
-              <p>Works from any app on Windows.</p>
+              <p>
+                Works from any app on {platformCapabilities.displayName}.
+                {platformCapabilities.session === "wayland"
+                  ? " Availability depends on your desktop session."
+                  : ""}
+              </p>
             </div>
             <button className="hotkey" onClick={onCaptureHotkey}>
               {capturingHotkey
@@ -195,6 +207,13 @@ export default function SettingsContent({
                 : displayHotkey(settings.hotkey)}
             </button>
           </div>
+          {!platformCapabilities.globalShortcutSupported && (
+            <p className="platform-notice" role="status">
+              Your desktop session did not grant a global shortcut. Open Wispr
+              Type from the tray to dictate, or use your desktop environment’s
+              shortcut configuration.
+            </p>
+          )}
           <div className="setting-row">
             <div>
               <strong>Dictation commands</strong>
@@ -313,23 +332,45 @@ export default function SettingsContent({
           <div className="setting-row">
             <div>
               <strong>After transcription</strong>
-              <p>What happens to your text.</p>
+              <p>Auto-paste keeps your clipboard unchanged.</p>
             </div>
             <div className="segmented">
               <button
-                className={settings.outputAction === "paste" ? "selected" : ""}
+                className={
+                  platformCapabilities.autoPasteSupported &&
+                  settings.outputAction === "paste"
+                    ? "selected"
+                    : ""
+                }
                 onClick={() => persist({ ...settings, outputAction: "paste" })}
+                disabled={!platformCapabilities.autoPasteSupported}
+                title={
+                  platformCapabilities.autoPasteSupported
+                    ? undefined
+                    : "Auto-paste is unavailable in this Wayland session"
+                }
               >
                 Auto-paste
               </button>
               <button
-                className={settings.outputAction === "copy" ? "selected" : ""}
+                className={
+                  !platformCapabilities.autoPasteSupported ||
+                  settings.outputAction === "copy"
+                    ? "selected"
+                    : ""
+                }
                 onClick={() => persist({ ...settings, outputAction: "copy" })}
               >
                 Copy
               </button>
             </div>
           </div>
+          {!platformCapabilities.autoPasteSupported && (
+            <p className="platform-notice" role="status">
+              Wayland blocks synthetic typing for security. Dictations will copy
+              to the clipboard; use your app’s normal paste shortcut.
+            </p>
+          )}
           <div className="setting-row">
             <div>
               <strong>Text mode</strong>
@@ -386,8 +427,8 @@ export default function SettingsContent({
             </span>
           </div>
           <p className="api-description">
-            Your API key is encrypted by Windows Credential Manager. It is never
-            written to your history or settings file.
+            Your API key is encrypted by your operating system credential store.
+            It is never written to your history or settings file.
           </p>
           <div className="api-key-entry">
             <div className="api-key-label">
@@ -528,11 +569,11 @@ export default function SettingsContent({
           </div>
           <div className="setting-row">
             <div>
-              <strong>Windows notifications</strong>
+              <strong>Native notifications</strong>
               <p>Show a native notification when dictation is complete.</p>
             </div>
             <Toggle
-              label="Windows notifications"
+              label="Native notifications"
               checked={settings.notificationsEnabled}
               onChange={(notificationsEnabled) =>
                 persist({ ...settings, notificationsEnabled })
@@ -585,7 +626,7 @@ export default function SettingsContent({
             </span>
             <span>
               Transcript history stays in a local SQLite database; your API key
-              stays in Windows Credential Manager.
+              stays in secure operating-system storage.
             </span>
             <span>
               Retention by Groq is governed by your Groq project’s data policy.
