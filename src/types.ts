@@ -21,6 +21,7 @@ export type Settings = {
   localWhisperModel:
     "tiny" | "base" | "small" | "medium" | "large-v3-turbo" | "large-v3";
   localWhisperAcceleration: "auto" | "cpu" | "vulkan";
+  discordPushToMuteEnabled: boolean;
 };
 
 export type Transcript = {
@@ -51,6 +52,12 @@ export type OverlayPayload = {
 
 export type ApiKeyTestResult = {
   success: boolean;
+  message: string;
+};
+
+export type DiscordPushToMuteStatus = {
+  supported: boolean;
+  configured: boolean;
   message: string;
 };
 
@@ -98,6 +105,7 @@ export const fallbackSettings: Settings = {
   transcriptionProvider: "groq",
   localWhisperModel: "base",
   localWhisperAcceleration: "auto",
+  discordPushToMuteEnabled: false,
 };
 
 export const fallbackPlatformCapabilities: PlatformCapabilities = {

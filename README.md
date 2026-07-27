@@ -28,6 +28,7 @@ The app runs quietly in the system tray, works from any application, and keeps t
 - Local transcript history with pinning, editing, search, and configurable retention
 - Secure Groq API-key storage through Windows Credential Manager
 - Optional offline Local Whisper models with CPU inference and Vulkan GPU builds for Windows and Linux
+- Optional Discord push-to-mute on Windows through Discord’s native `Push To Mute` keybind
 - A retry action for transient transcription failures; failed audio stays in memory only until success or app exit
 - System tray controls, launch-at-sign-in, start-in-tray, native notifications, updates, logging, and single-instance protection
 
@@ -74,6 +75,7 @@ Veskri is designed to make its local data handling clear:
 - Transcript history is stored locally in SQLite and can be disabled or cleared from Settings.
 - Audio is sent to Groq when you transcribe. Groq’s retention and processing terms are governed by your Groq project and account; see [Groq’s data documentation](https://console.groq.com/docs/your-data).
 - Local Whisper performs transcription on the device. Downloaded models are SHA-256 checked before use and no dictation audio is uploaded while this provider is selected.
+- Discord push-to-mute uses a local simulated keypress for Discord Desktop only. It does not require, collect, or store a Discord client secret, account token, call audio, or message data.
 
 Do not dictate sensitive, regulated, or third-party data without ensuring that your organisation’s policies permit it.
 
@@ -117,7 +119,7 @@ pnpm build
 
 ## Releases
 
-`pnpm build` creates artifacts for the current operating system and signed updater files. The GitHub Actions release workflow serializes Windows, Linux, and unsigned macOS builds when a version tag is pushed, so their updater metadata is merged safely. Linux AppImage, Debian, and RPM downloads include detached GPG signatures; see the [release verification guide](docs/releasing.md#linux-gpg-release-signing).
+`pnpm build` creates artifacts for the current operating system and signed updater files. The GitHub Actions release workflow builds Windows, Linux, and unsigned macOS artifacts in parallel and merges their updater metadata into the tagged GitHub Release. Linux AppImage, Debian, and RPM downloads include detached GPG signatures; see the [release verification guide](docs/releasing.md#linux-gpg-release-signing).
 
 For the project’s release checklist and signing setup, see [docs/releasing.md](./docs/releasing.md).
 

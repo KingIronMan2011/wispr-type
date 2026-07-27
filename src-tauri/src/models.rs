@@ -45,6 +45,8 @@ pub(crate) struct AppSettings {
     pub(crate) local_whisper_model: String,
     #[serde(default = "default_local_whisper_acceleration")]
     pub(crate) local_whisper_acceleration: String,
+    #[serde(default)]
+    pub(crate) discord_push_to_mute_enabled: bool,
 }
 
 fn default_history_retention() -> String {
@@ -90,6 +92,7 @@ impl Default for AppSettings {
             transcription_provider: default_transcription_provider(),
             local_whisper_model: default_local_whisper_model(),
             local_whisper_acceleration: default_local_whisper_acceleration(),
+            discord_push_to_mute_enabled: false,
         }
     }
 }
@@ -117,6 +120,7 @@ pub(crate) struct AppState {
     pub(crate) recording: Mutex<Option<NativeRecording>>,
     pub(crate) recording_level: Arc<AtomicU32>,
     pub(crate) recording_error: Arc<Mutex<Option<String>>>,
+    pub(crate) discord_push_to_mute_held: AtomicBool,
     pub(crate) last_failed_audio: Mutex<Option<TranscriptionAudio>>,
     pub(crate) global_shortcut_available: AtomicBool,
 }

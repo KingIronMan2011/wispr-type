@@ -9,7 +9,7 @@ use crate::{
     transcription::copy_to_clipboard,
 };
 use serde::Serialize;
-use std::{fs, sync::atomic::Ordering, time::Duration};
+use std::{collections::HashSet, fs, sync::atomic::Ordering, time::Duration};
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_autostart::ManagerExt as AutostartExt;
 use tauri_plugin_global_shortcut::GlobalShortcutExt;
@@ -428,6 +428,147 @@ pub(crate) fn set_history_pinned(
     Ok(history)
 }
 
+pub(crate) fn set_history_items_pinned(
+    state: State<AppState>,
+    ids: Vec<String>,
+    pinned: bool,
+) -> Result<Vec<Transcript>, String> {
+    let ids: HashSet<_> = ids.into_iter().collect();
+    if ids.is_empty() {
+        return Err("Choose at least one transcript first.".into());
+    }
+    let _guard = state
+        .history_lock
+        .lock()
+        .map_err(|_| "History is unavailable".to_string())?;
+    let mut history = load_history(&state);
+    let mut updated = 0;
+    for item in &mut history {
+        if ids.contains(&item.id) {
+            item.pinned = pinned;
+            updated += 1;
+        }
+    }
+    if updated == 0 {
+        return Err("The selected transcripts are no longer available.".into());
+    }
+    sort_history(&mut history);
+    save_history(&state, &history)?;
+    Ok(history)
+}
+
+pub(crate) fn delete_history_items(
+    state: State<AppState>,
+    ids: Vec<String>,
+) -> Result<Vec<Transcript>, String> {
+    let ids: HashSet<_> = ids.into_iter().collect();
+    if ids.is_empty() {
+        return Err("Choose at least one transcript first.".into());
+    }
+    let _guard = state
+        .history_lock
+        .lock()
+        .map_err(|_| "History is unavailable".to_string())?;
+    let mut history = load_history(&state);
+    let before = history.len();
+    history.retain(|item| !ids.contains(&item.id));
+    if history.len() == before {
+        return Err("The selected transcripts are no longer available.".into());
+    }
+    save_history(&state, &history)?;
+    Ok(history)
+}
+
+pub(crate) fn export_history_items(
+    app: AppHandle,
+    state: State<AppState>,
+    ids: Vec<String>,
+    format: String,
+) -> Result<String, String> {
+    let ids: HashSet<_> = ids.into_iter().collect();
+    if ids.is_empty() {
+        return Err("Choose at least one transcript first.".into());
+    }
+    let _guard = state
+        .history_lock
+        .lock()
+        .map_err(|_| "History is unavailable".to_string())?;
+    let history = load_history(&state);
+    let selected: Vec<_> = history
+        .into_iter()
+        .filter(|item| ids.contains(&item.id))
+        .collect();
+    if selected.is_empty() {
+        return Err("The selected transcripts are no longer available.".into());
+    }
+
+    let (extension, content) = match format.as_str() {
+        "json" => (
+            "json",
+            serde_json::to_string_pretty(&selected)
+                .map_err(|_| "Couldn’t prepare the history export.")?,
+        ),
+        "csv" => ("csv", history_csv(&selected)),
+        "txt" => ("txt", history_text(&selected)),
+        _ => return Err("Choose JSON, CSV, or text for the history export.".into()),
+    };
+    let directory = app
+        .path()
+        .download_dir()
+        .or_else(|_| app.path().app_data_dir())
+        .map_err(|_| "Couldn’t find a folder for the history export.")?;
+    fs::create_dir_all(&directory)
+        .map_err(|_| "Couldn’t create the folder for the history export.")?;
+    let file_name = format!(
+        "veskri-history-{}.{}",
+        chrono::Utc::now().format("%Y%m%d-%H%M%S"),
+        extension
+    );
+    let path = directory.join(file_name);
+    fs::write(&path, content).map_err(|_| "Couldn’t write the history export.")?;
+    Ok(path.display().to_string())
+}
+
+fn history_csv(items: &[Transcript]) -> String {
+    let mut export = String::from("created_at,language,pinned,text\n");
+    for item in items {
+        for (index, value) in [
+            item.created_at.as_str(),
+            item.language.as_str(),
+            if item.pinned { "true" } else { "false" },
+            item.text.as_str(),
+        ]
+        .iter()
+        .enumerate()
+        {
+            if index > 0 {
+                export.push(',');
+            }
+            export.push('"');
+            export.push_str(&value.replace('"', "\"\""));
+            export.push('"');
+        }
+        export.push('\n');
+    }
+    export
+}
+
+fn history_text(items: &[Transcript]) -> String {
+    items
+        .iter()
+        .map(|item| {
+            format!(
+                "{} · {}{}\n{}",
+                item.created_at,
+                item.language,
+                if item.pinned { " · Pinned" } else { "" },
+                item.text
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n\n")
+}
+
 pub(crate) fn reset_local_data(app: AppHandle, state: State<AppState>) -> Result<(), String> {
     let _guard = state
         .history_lock
@@ -469,9 +610,9 @@ pub(crate) fn reset_local_data(app: AppHandle, state: State<AppState>) -> Result
 mod tests {
     use super::{
         diagnostic_context, diagnostic_language, diagnostic_model, diagnostic_output_action,
-        microphone_selection,
+        history_csv, history_text, microphone_selection,
     };
-    use crate::models::AppSettings;
+    use crate::models::{AppSettings, Transcript};
 
     #[test]
     fn diagnostics_redact_unexpected_settings_values_and_microphone_names() {
@@ -502,5 +643,23 @@ mod tests {
         assert_eq!(diagnostic_context("microphone-check"), "microphone check");
         assert_eq!(diagnostic_context("transcription"), "transcription");
         assert_eq!(diagnostic_context("unexpected private value"), "general");
+    }
+
+    #[test]
+    fn history_exports_escape_csv_and_preserve_text() {
+        let items = [Transcript {
+            id: "private-id".into(),
+            text: "Hello, \"Veskri\"".into(),
+            created_at: "2026-07-28T00:00:00Z".into(),
+            language: "en".into(),
+            pinned: true,
+        }];
+
+        assert_eq!(
+            history_csv(&items),
+            "created_at,language,pinned,text\n\"2026-07-28T00:00:00Z\",\"en\",\"true\",\"Hello, \"\"Veskri\"\"\"\n"
+        );
+        assert!(history_text(&items).contains("Pinned"));
+        assert!(history_text(&items).contains("Hello, \"Veskri\""));
     }
 }

@@ -15,6 +15,16 @@ test.beforeEach(async ({ page }) => {
       historyRetention: "15",
       notificationsEnabled: true,
       completedOnboarding: false,
+      voiceCommandsEnabled: false,
+      textMode: "literal",
+      personalVocabulary: "",
+      dictionaryReplacements: "",
+      autoInstallUpdates: false,
+      deferredUpdateVersion: "",
+      transcriptionProvider: "groq",
+      localWhisperModel: "base",
+      localWhisperAcceleration: "auto",
+      discordPushToMuteEnabled: false,
     };
     let callbacks = 0;
     (
@@ -51,6 +61,6 @@ test("first-run onboarding can be completed without a key", async ({
 }) => {
   await page.goto("/");
   await expect(page.getByText("WELCOME TO VESKRI")).toBeVisible();
-  await page.getByRole("button", { name: "Set up later" }).click();
+  await page.getByRole("button", { name: "Set up a key later" }).click();
   await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
 });

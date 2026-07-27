@@ -1,3 +1,4 @@
+use crate::{models::AppState, push_to_mute};
 use tauri::{
     image::Image,
     menu::{Menu, MenuItem},
@@ -56,7 +57,12 @@ pub(crate) fn set_up_tray(app: &AppHandle) -> tauri::Result<()> {
                     let _ = window.set_focus();
                 }
             }
-            "quit" => app.exit(0),
+            "quit" => {
+                if let Some(state) = app.try_state::<AppState>() {
+                    let _ = push_to_mute::restore_after_dictation(&state);
+                }
+                app.exit(0);
+            }
             _ => {}
         })
         .build(app)?;

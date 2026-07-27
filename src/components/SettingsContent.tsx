@@ -14,6 +14,7 @@ import {
   LockKeyhole,
   Mic,
   MonitorUp,
+  MessageCircle,
   ShieldCheck,
   SlidersHorizontal,
   Sparkles,
@@ -23,6 +24,7 @@ import { Select, Toggle } from "./Controls";
 import {
   displayHotkey,
   type ApiKeyTestResult,
+  type DiscordPushToMuteStatus,
   type LocalWhisperCapabilities,
   type LocalWhisperModel,
   type PlatformCapabilities,
@@ -66,6 +68,8 @@ type Props = {
   onTestKey: () => void;
   onRemoveKey: () => void;
   onOpenGroqKeys: () => void;
+  discordPushToMuteStatus: DiscordPushToMuteStatus;
+  onTestDiscordPushToMute: () => void;
   onOpenPrivacyInfo: () => void;
   onCopyDiagnostics: () => void;
   availableUpdate: Update | null;
@@ -118,6 +122,8 @@ export default function SettingsContent({
   onTestKey,
   onRemoveKey,
   onOpenGroqKeys,
+  discordPushToMuteStatus,
+  onTestDiscordPushToMute,
   onOpenPrivacyInfo,
   onCopyDiagnostics,
   availableUpdate,
@@ -761,6 +767,57 @@ export default function SettingsContent({
               Get a Groq API key <ExternalLink size={13} />
             </button>
             <span>Testing never stores the entered key.</span>
+          </div>
+        </section>
+        <section className="panel discord-panel">
+          <div className="panel-heading">
+            <div>
+              <MessageCircle size={18} />
+              <h3>Call integration</h3>
+            </div>
+            <span
+              className={
+                settings.discordPushToMuteEnabled &&
+                discordPushToMuteStatus.configured
+                  ? "connected"
+                  : "disconnected"
+              }
+            >
+              {settings.discordPushToMuteEnabled &&
+              discordPushToMuteStatus.configured
+                ? "Enabled"
+                : "Optional"}
+            </span>
+          </div>
+          <div className="setting-row">
+            <div>
+              <strong>Mute Discord while dictating</strong>
+              <p>{discordPushToMuteStatus.message}</p>
+            </div>
+            <Toggle
+              label="Mute Discord while dictating"
+              checked={settings.discordPushToMuteEnabled}
+              disabled={!discordPushToMuteStatus.supported}
+              onChange={(discordPushToMuteEnabled) =>
+                persist({ ...settings, discordPushToMuteEnabled })
+              }
+            />
+          </div>
+          <p className="discord-built-in-note">
+            In Discord Desktop, open User Settings → Keybinds → Add a Keybind,
+            choose <strong>Push To Mute</strong>, and set it to{" "}
+            <strong>Ctrl + Alt + Shift + F12</strong>. Discord must use Voice
+            Activity for this keybind.
+          </p>
+          <div className="discord-actions">
+            <button
+              type="button"
+              onClick={onTestDiscordPushToMute}
+              disabled={!discordPushToMuteStatus.supported}
+            >
+              Test Discord keybind
+            </button>
+            <span>Discord Desktop needs to be open to verify the setup.</span>
           </div>
         </section>
         <section className="panel behavior-panel">

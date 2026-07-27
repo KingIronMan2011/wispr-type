@@ -23,6 +23,7 @@ import {
   fallbackPlatformCapabilities,
   hotkeyFromEvent,
   type ApiKeyTestResult,
+  type DiscordPushToMuteStatus,
   type LocalWhisperCapabilities,
   type LocalWhisperDownloadProgress,
   type LocalWhisperModel,
@@ -43,6 +44,12 @@ const fallbackLocalWhisperCapabilities: LocalWhisperCapabilities = {
   cpuAvailable: true,
   vulkanAvailable: false,
   availableMemoryMib: 0,
+};
+
+const fallbackDiscordPushToMuteStatus: DiscordPushToMuteStatus = {
+  supported: false,
+  configured: false,
+  message: "Discord push-to-mute is unavailable until Veskri has loaded.",
 };
 
 export default function App() {
@@ -91,6 +98,8 @@ export default function App() {
     useState<LocalWhisperCapabilities>(fallbackLocalWhisperCapabilities);
   const [localWhisperDownload, setLocalWhisperDownload] =
     useState<LocalWhisperDownloadProgress | null>(null);
+  const [discordPushToMuteStatus, setDiscordPushToMuteStatus] =
+    useState<DiscordPushToMuteStatus>(fallbackDiscordPushToMuteStatus);
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const [inputLevel, setInputLevel] = useState(0);
@@ -143,6 +152,7 @@ export default function App() {
       capabilities,
       localModels,
       localCapabilities,
+      discordStatus,
     ] = await Promise.all([
       invoke<Settings>("get_settings"),
       invoke<Transcript[]>("get_history"),
@@ -158,6 +168,9 @@ export default function App() {
           (capabilities) => capabilities ?? fallbackLocalWhisperCapabilities,
         )
         .catch(() => fallbackLocalWhisperCapabilities),
+      invoke<DiscordPushToMuteStatus>("get_discord_push_to_mute_status")
+        .then((status) => status ?? fallbackDiscordPushToMuteStatus)
+        .catch(() => fallbackDiscordPushToMuteStatus),
     ]);
     settingsRef.current = saved;
     setSettings(saved);
@@ -166,6 +179,7 @@ export default function App() {
     setPlatformCapabilities(capabilities ?? fallbackPlatformCapabilities);
     setLocalWhisperModels(localModels);
     setLocalWhisperCapabilities(localCapabilities);
+    setDiscordPushToMuteStatus(discordStatus);
     setBootstrapped(true);
   }, []);
 
@@ -329,6 +343,15 @@ export default function App() {
       if (version === settingsSaveVersion.current) {
         settingsRef.current = saved;
         setSettings(saved);
+        void invoke<DiscordPushToMuteStatus>("get_discord_push_to_mute_status")
+          .then((status) =>
+            setDiscordPushToMuteStatus(
+              status ?? fallbackDiscordPushToMuteStatus,
+            ),
+          )
+          .catch(() =>
+            setDiscordPushToMuteStatus(fallbackDiscordPushToMuteStatus),
+          );
       }
       return true;
     } catch (error) {
@@ -716,8 +739,25 @@ export default function App() {
     try {
       await invoke("copy_to_clipboard", { text: item.text });
       setMessage("Transcript copied to clipboard");
+      return true;
     } catch {
       setMessage("Couldn’t copy that transcript");
+      return false;
+    }
+  };
+  const copyTranscripts = async (items: Transcript[]) => {
+    if (items.length === 0) return false;
+    try {
+      await invoke("copy_to_clipboard", {
+        text: items.map((item) => item.text).join("\n\n"),
+      });
+      setMessage(
+        `${items.length} transcript${items.length === 1 ? "" : "s"} copied to clipboard`,
+      );
+      return true;
+    } catch {
+      setMessage("Couldn’t copy the selected transcripts");
+      return false;
     }
   };
   const copyDiagnostics = async () => {
@@ -756,6 +796,63 @@ export default function App() {
     } catch (error) {
       setMessage(
         typeof error === "string" ? error : "Couldn’t update that transcript",
+      );
+      return false;
+    }
+  };
+  const bulkSetHistoryPinned = async (ids: string[], pinned: boolean) => {
+    try {
+      const next = await invoke<Transcript[]>("set_history_items_pinned", {
+        ids,
+        pinned,
+      });
+      setHistory(next);
+      setMessage(
+        `${ids.length} transcript${ids.length === 1 ? "" : "s"} ${pinned ? "pinned" : "unpinned"}`,
+      );
+      return true;
+    } catch (error) {
+      setMessage(
+        typeof error === "string"
+          ? error
+          : "Couldn’t update the selected transcripts",
+      );
+      return false;
+    }
+  };
+  const deleteHistoryItems = async (ids: string[]) => {
+    try {
+      const next = await invoke<Transcript[]>("delete_history_items", { ids });
+      setHistory(next);
+      setMessage(
+        `${ids.length} transcript${ids.length === 1 ? "" : "s"} deleted`,
+      );
+      return true;
+    } catch (error) {
+      setMessage(
+        typeof error === "string"
+          ? error
+          : "Couldn’t delete the selected transcripts",
+      );
+      return false;
+    }
+  };
+  const exportHistoryItems = async (
+    ids: string[],
+    format: "json" | "csv" | "txt",
+  ) => {
+    try {
+      const path = await invoke<string>("export_history_items", {
+        ids,
+        format,
+      });
+      setMessage(`History export saved to ${path}`);
+      return true;
+    } catch (error) {
+      setMessage(
+        typeof error === "string"
+          ? error
+          : "Couldn’t export the selected transcripts",
       );
       return false;
     }
@@ -893,6 +990,22 @@ export default function App() {
                 ),
               )
             }
+            discordPushToMuteStatus={discordPushToMuteStatus}
+            onTestDiscordPushToMute={() =>
+              void invoke("test_discord_push_to_mute")
+                .then(() =>
+                  setMessage(
+                    "Sent the Discord Push To Mute shortcut for a short test.",
+                  ),
+                )
+                .catch((error) =>
+                  setMessage(
+                    typeof error === "string"
+                      ? error
+                      : "Couldn’t send the Discord Push To Mute shortcut.",
+                  ),
+                )
+            }
             onOpenPrivacyInfo={() =>
               void openUrl("https://console.groq.com/docs/your-data").catch(
                 () =>
@@ -921,7 +1034,11 @@ export default function App() {
             settings={settings}
             onClear={() => void clearHistory()}
             onCopy={(item) => void copyTranscript(item)}
+            onCopyMany={copyTranscripts}
             onPin={(item) => void togglePinned(item)}
+            onBulkPin={bulkSetHistoryPinned}
+            onBulkDelete={deleteHistoryItems}
+            onExport={exportHistoryItems}
             onEdit={saveHistoryEdit}
             historySectionRef={setHistorySection}
           />

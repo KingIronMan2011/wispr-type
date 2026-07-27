@@ -5,6 +5,7 @@ mod local_whisper;
 mod models;
 mod overlay;
 mod platform;
+mod push_to_mute;
 mod storage;
 mod transcription;
 mod webm_opus;
@@ -63,13 +64,34 @@ fn get_platform_capabilities(state: State<AppState>) -> platform::PlatformCapabi
     platform::capabilities(state.global_shortcut_available.load(Ordering::Relaxed))
 }
 #[tauri::command]
-fn start_native_recording(app: AppHandle, state: State<AppState>) -> Result<(), String> {
-    match audio::start_native_recording(state) {
+fn get_discord_push_to_mute_status(
+    state: State<'_, AppState>,
+) -> push_to_mute::DiscordPushToMuteStatus {
+    push_to_mute::status(&storage::load_settings(&state))
+}
+#[tauri::command]
+fn test_discord_push_to_mute() -> Result<(), String> {
+    push_to_mute::test_keybind()
+}
+#[tauri::command]
+async fn start_native_recording(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
+    let settings = storage::load_settings(&state);
+    let muted_discord = match push_to_mute::mute_for_dictation(&state, &settings) {
+        Ok(()) => true,
+        Err(error) => {
+            log::warn!("Discord push-to-mute was unavailable: {error}");
+            false
+        }
+    };
+    match audio::start_native_recording(state.clone()) {
         Ok(()) => {
             overlay::show(&app, "listening", "Listening — release to transcribe");
             Ok(())
         }
         Err(error) => {
+            if muted_discord {
+                let _ = push_to_mute::restore_after_dictation(&state);
+            }
             overlay::show(&app, "error", &error);
             Err(error)
         }
@@ -86,10 +108,13 @@ fn get_recording_status(state: State<AppState>) -> audio::RecordingStatus {
 #[tauri::command]
 fn cancel_native_recording(
     app: AppHandle,
-    state: State<AppState>,
+    state: State<'_, AppState>,
     reason: Option<String>,
 ) -> Result<(), String> {
-    audio::cancel_native_recording(state)?;
+    audio::cancel_native_recording(state.clone())?;
+    if let Err(error) = push_to_mute::restore_after_dictation(&state) {
+        log::warn!("Couldn’t restore Discord mute state: {error}");
+    }
     if let Some(reason) = reason {
         overlay::show(&app, "error", reason);
     } else {
@@ -104,7 +129,10 @@ async fn stop_native_recording(
     output_action: Option<String>,
 ) -> Result<Transcript, String> {
     overlay::show(&app, "transcribing", "Turning speech into text…");
-    let result = audio::stop_native_recording(app.clone(), state, output_action).await;
+    let result = audio::stop_native_recording(app.clone(), state.clone(), output_action).await;
+    if let Err(error) = push_to_mute::restore_after_dictation(&state) {
+        log::warn!("Couldn’t restore Discord mute state: {error}");
+    }
     match &result {
         Ok(_) => {
             overlay::show(&app, "success", "Done — sent to your workspace");
@@ -214,6 +242,30 @@ fn set_history_pinned(
     commands::set_history_pinned(state, id, pinned)
 }
 #[tauri::command]
+fn set_history_items_pinned(
+    state: State<AppState>,
+    ids: Vec<String>,
+    pinned: bool,
+) -> Result<Vec<Transcript>, String> {
+    commands::set_history_items_pinned(state, ids, pinned)
+}
+#[tauri::command]
+fn delete_history_items(
+    state: State<AppState>,
+    ids: Vec<String>,
+) -> Result<Vec<Transcript>, String> {
+    commands::delete_history_items(state, ids)
+}
+#[tauri::command]
+fn export_history_items(
+    app: AppHandle,
+    state: State<AppState>,
+    ids: Vec<String>,
+    format: String,
+) -> Result<String, String> {
+    commands::export_history_items(app, state, ids, format)
+}
+#[tauri::command]
 fn reset_local_data(app: AppHandle, state: State<AppState>) -> Result<(), String> {
     commands::reset_local_data(app, state)
 }
@@ -284,6 +336,7 @@ pub fn run() {
                 recording: Mutex::new(None),
                 recording_level: Arc::new(AtomicU32::new(0)),
                 recording_error: Arc::new(Mutex::new(None)),
+                discord_push_to_mute_held: AtomicBool::new(false),
                 last_failed_audio: Mutex::new(None),
                 global_shortcut_available: AtomicBool::new(true),
             });
@@ -334,6 +387,7 @@ pub fn run() {
                         api.prevent_close();
                         let _ = window.hide();
                     } else {
+                        let _ = push_to_mute::restore_after_dictation(&state);
                         window.app_handle().exit(0);
                     }
                 }
@@ -347,6 +401,8 @@ pub fn run() {
             download_local_whisper_model,
             delete_local_whisper_model,
             get_platform_capabilities,
+            get_discord_push_to_mute_status,
+            test_discord_push_to_mute,
             start_native_recording,
             start_microphone_check,
             get_recording_status,
@@ -366,6 +422,9 @@ pub fn run() {
             clear_history,
             update_history_item,
             set_history_pinned,
+            set_history_items_pinned,
+            delete_history_items,
+            export_history_items,
             reset_local_data,
             copy_to_clipboard,
             copy_privacy_safe_diagnostics
