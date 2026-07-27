@@ -14,6 +14,9 @@ export type Settings = {
   voiceCommandsEnabled: boolean;
   textMode: "literal" | "polished";
   personalVocabulary: string;
+  dictionaryReplacements: string;
+  autoInstallUpdates: boolean;
+  deferredUpdateVersion: string;
 };
 
 export type Transcript = {
@@ -63,6 +66,9 @@ export const fallbackSettings: Settings = {
   voiceCommandsEnabled: false,
   textMode: "literal",
   personalVocabulary: "",
+  dictionaryReplacements: "",
+  autoInstallUpdates: false,
+  deferredUpdateVersion: "",
 };
 
 export const fallbackPlatformCapabilities: PlatformCapabilities = {

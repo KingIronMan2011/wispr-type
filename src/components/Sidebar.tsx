@@ -16,26 +16,28 @@ export default function Sidebar({
         <img src={logo} alt="Veskri" />
         <span>Veskri</span>
       </div>
-      <nav>
+      <nav aria-label="Primary navigation">
         <a
           className={activeSection === "settings" ? "active" : ""}
+          aria-current={activeSection === "settings" ? "location" : undefined}
           href="#settings"
           onClick={(event) => {
             event.preventDefault();
             onNavigate("settings");
           }}
         >
-          <Settings2 size={17} /> Settings
+          <Settings2 size={17} aria-hidden="true" /> Settings
         </a>
         <a
           className={activeSection === "history" ? "active" : ""}
+          aria-current={activeSection === "history" ? "location" : undefined}
           href="#history"
           onClick={(event) => {
             event.preventDefault();
             onNavigate("history");
           }}
         >
-          <History size={17} /> History{" "}
+          <History size={17} aria-hidden="true" /> History{" "}
           <span className="nav-count">{historyCount}</span>
         </a>
       </nav>

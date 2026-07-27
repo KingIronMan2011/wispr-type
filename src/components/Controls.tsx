@@ -11,11 +11,14 @@ export function Toggle({
 }) {
   return (
     <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
       aria-label={label}
       className={`toggle ${checked ? "on" : ""}`}
       onClick={() => onChange(!checked)}
     >
-      <span />
+      <span aria-hidden="true" />
     </button>
   );
 }

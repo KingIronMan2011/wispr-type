@@ -70,7 +70,12 @@ export default function DictationOverlay() {
     );
 
   return (
-    <main className={`dictation-overlay ${overlay.state}`}>
+    <main
+      className={`dictation-overlay ${overlay.state}`}
+      role="status"
+      aria-live={overlay.state === "error" ? "assertive" : "polite"}
+      aria-atomic="true"
+    >
       <div className="overlay-icon">{icon}</div>
       <div className="overlay-copy">
         <strong>

@@ -5,9 +5,16 @@ This is the retained shortlist of product improvements discussed for Veskri.
 ## Next up
 
 - Add a selectable auto-paste strategy: direct typing preserves the clipboard; clipboard paste maximises compatibility with restrictive applications.
-- Add optional deterministic dictionary replacement rules in addition to Whisper's preferred-spellings prompt.
-- Improve update UX with release notes, deferred installation, and an eventual beta channel.
-- Complete the accessibility pass: keyboard navigation, focus states, screen-reader coverage, contrast review, and reduced-motion support.
+- Add a richer transcript editor, including optional bulk actions and export.
+- Add optional local-only language and text-processing controls for users who need a stricter privacy posture.
+- Consider a selectable direct-typing versus clipboard-paste strategy after more cross-platform testing.
+- Explore an opt-in push-to-mute integration for voice calls: mute supported apps such as Discord while Veskri is recording, then restore the prior mute state afterwards.
+
+## Recently completed
+
+- Deterministic, literal dictionary replacement rules that run in user-defined order after transcription processing.
+- Update UX with release notes, deferred installation, manual checks, and an opt-in automatic install check at startup. There is intentionally no beta channel.
+- Accessibility pass covering visible keyboard focus, semantic switches and button groups, live status announcements, screen-reader labels, keyboard transcript editing, contrast improvements, skip navigation, and reduced-motion support.
 
 ## Distribution follow-up
 

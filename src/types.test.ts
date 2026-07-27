@@ -5,6 +5,9 @@ describe("settings defaults", () => {
   it("keeps a safe first-run state", () => {
     expect(fallbackSettings.completedOnboarding).toBe(false);
     expect(fallbackSettings.notificationsEnabled).toBe(true);
+    expect(fallbackSettings.dictionaryReplacements).toBe("");
+    expect(fallbackSettings.autoInstallUpdates).toBe(false);
+    expect(fallbackSettings.deferredUpdateVersion).toBe("");
   });
 
   it("formats Tauri shortcut codes for people", () => {

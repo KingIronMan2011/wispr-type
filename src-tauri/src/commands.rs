@@ -58,6 +58,21 @@ pub(crate) fn save_settings(
         .chars()
         .take(650)
         .collect();
+    settings.dictionary_replacements = settings
+        .dictionary_replacements
+        .lines()
+        .take(50)
+        .collect::<Vec<_>>()
+        .join("\n")
+        .chars()
+        .take(4_000)
+        .collect();
+    settings.deferred_update_version = settings
+        .deferred_update_version
+        .trim()
+        .chars()
+        .take(64)
+        .collect();
     if settings.hotkey != existing.hotkey {
         replace_global_shortcut(&app, &settings.hotkey, &existing.hotkey)?;
     }

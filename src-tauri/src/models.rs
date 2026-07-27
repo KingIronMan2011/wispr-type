@@ -32,6 +32,12 @@ pub(crate) struct AppSettings {
     pub(crate) text_mode: String,
     #[serde(default)]
     pub(crate) personal_vocabulary: String,
+    #[serde(default)]
+    pub(crate) dictionary_replacements: String,
+    #[serde(default)]
+    pub(crate) auto_install_updates: bool,
+    #[serde(default)]
+    pub(crate) deferred_update_version: String,
 }
 
 fn default_history_retention() -> String {
@@ -62,6 +68,9 @@ impl Default for AppSettings {
             voice_commands_enabled: false,
             text_mode: "literal".into(),
             personal_vocabulary: String::new(),
+            dictionary_replacements: String::new(),
+            auto_install_updates: false,
+            deferred_update_version: String::new(),
         }
     }
 }

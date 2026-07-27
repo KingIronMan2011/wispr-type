@@ -61,7 +61,11 @@ export default function HistorySection({
               : `Last ${settings.historyRetention}`}
           </span>
         </div>
-        {history.length > 0 && <button onClick={onClear}>Clear</button>}
+        {history.length > 0 && (
+          <button type="button" onClick={onClear}>
+            Clear
+          </button>
+        )}
       </div>
       <label className="history-search">
         <Search size={14} />
@@ -84,6 +88,20 @@ export default function HistorySection({
                     onChange={(event) => setEditingText(event.target.value)}
                     aria-label="Edit transcript"
                     autoFocus
+                    onKeyDown={(event) => {
+                      if (event.key === "Escape") {
+                        event.preventDefault();
+                        setEditingId(null);
+                        setEditingText("");
+                      }
+                      if (
+                        event.key === "Enter" &&
+                        (event.ctrlKey || event.metaKey)
+                      ) {
+                        event.preventDefault();
+                        void saveEdit();
+                      }
+                    }}
                   />
                 ) : (
                   <p>{item.text}</p>
@@ -96,8 +114,11 @@ export default function HistorySection({
                 <div className="history-actions">
                   {editing ? (
                     <>
-                      <button onClick={() => void saveEdit()}>Save</button>
+                      <button type="button" onClick={() => void saveEdit()}>
+                        Save
+                      </button>
                       <button
+                        type="button"
                         onClick={() => {
                           setEditingId(null);
                           setEditingText("");
@@ -109,6 +130,7 @@ export default function HistorySection({
                   ) : (
                     <>
                       <button
+                        type="button"
                         onClick={() => onPin(item)}
                         aria-label={
                           item.pinned ? "Unpin transcript" : "Pin transcript"
@@ -118,6 +140,7 @@ export default function HistorySection({
                         {item.pinned ? <PinOff size={14} /> : <Pin size={14} />}
                       </button>
                       <button
+                        type="button"
                         onClick={() => {
                           setEditingId(item.id);
                           setEditingText(item.text);
@@ -128,6 +151,7 @@ export default function HistorySection({
                         <Pencil size={14} />
                       </button>
                       <button
+                        type="button"
                         onClick={() => onCopy(item)}
                         aria-label="Copy transcript"
                         title="Copy"

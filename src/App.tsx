@@ -93,6 +93,32 @@ export default function App() {
   const settingsSaveVersion = useRef(0);
   const updateCheckInProgress = useRef(false);
 
+  const installUpdatePackage = useCallback(
+    async (update: Update, automatic = false) => {
+      setIsInstallingUpdate(true);
+      setUpdateCheckMessage(
+        automatic
+          ? `Automatically downloading version ${update.version}…`
+          : `Downloading version ${update.version}…`,
+      );
+      try {
+        await update.downloadAndInstall();
+        setUpdateCheckMessage("Restarting to finish the update…");
+        await relaunch();
+        return true;
+      } catch {
+        setIsInstallingUpdate(false);
+        const failure = automatic
+          ? "Automatic update failed. You can install it manually."
+          : "Update download failed. Please try again.";
+        setUpdateCheckMessage(failure);
+        setMessage(failure);
+        return false;
+      }
+    },
+    [],
+  );
+
   const refresh = useCallback(async () => {
     const [saved, items, keyStatus, capabilities] = await Promise.all([
       invoke<Settings>("get_settings"),
@@ -134,43 +160,60 @@ export default function App() {
     return () => observer.disconnect();
   }, [historySection, settingsSection]);
 
-  const checkForUpdates = useCallback(async (silent = false) => {
-    if (updateCheckInProgress.current) return;
-    updateCheckInProgress.current = true;
-    setIsCheckingForUpdates(true);
-    if (!silent) setUpdateCheckMessage("Checking for updates…");
-    try {
-      const update = await check();
-      setAvailableUpdate(update);
-      if (!silent) {
-        setUpdateCheckMessage(
-          update
-            ? `Version ${update.version} is ready to install.`
-            : "Veskri is up to date.",
-        );
+  const checkForUpdates = useCallback(
+    async (silent = false, startup = false) => {
+      if (updateCheckInProgress.current) return;
+      updateCheckInProgress.current = true;
+      setIsCheckingForUpdates(true);
+      if (!silent) setUpdateCheckMessage("Checking for updates…");
+      try {
+        const update = await check();
+        setAvailableUpdate(update);
+        const isDeferred =
+          update?.version === settingsRef.current.deferredUpdateVersion;
+        if (
+          update &&
+          startup &&
+          settingsRef.current.autoInstallUpdates &&
+          !isDeferred
+        ) {
+          await installUpdatePackage(update, true);
+          return;
+        }
+        if (!silent) {
+          setUpdateCheckMessage(
+            update
+              ? isDeferred
+                ? `Version ${update.version} is ready when you are.`
+                : `Version ${update.version} is ready to install.`
+              : "Veskri is up to date.",
+          );
+        }
+      } catch {
+        if (!silent) {
+          setUpdateCheckMessage(
+            "Couldn’t check for updates. Check your connection and try again.",
+          );
+        }
+      } finally {
+        updateCheckInProgress.current = false;
+        setIsCheckingForUpdates(false);
       }
-    } catch {
-      if (!silent) {
-        setUpdateCheckMessage(
-          "Couldn’t check for updates. Check your connection and try again.",
-        );
-      }
-    } finally {
-      updateCheckInProgress.current = false;
-      setIsCheckingForUpdates(false);
-    }
-  }, []);
+    },
+    [installUpdatePackage],
+  );
 
   useEffect(() => {
     let disposed = false;
+    if (!bootstrapped) return;
     const timer = window.setTimeout(() => {
-      if (!disposed) void checkForUpdates(true);
+      if (!disposed) void checkForUpdates(true, true);
     }, 1_500);
     return () => {
       disposed = true;
       window.clearTimeout(timer);
     };
-  }, [checkForUpdates]);
+  }, [bootstrapped, checkForUpdates]);
 
   const loadMicrophones = useCallback(async () => {
     try {
@@ -208,6 +251,19 @@ export default function App() {
       return false;
     }
   }, []);
+
+  const deferUpdate = useCallback(async () => {
+    if (!availableUpdate || isInstallingUpdate) return;
+    const saved = await persist({
+      ...settingsRef.current,
+      deferredUpdateVersion: availableUpdate.version,
+    });
+    if (saved) {
+      setUpdateCheckMessage(
+        `Version ${availableUpdate.version} will stay ready until you install it.`,
+      );
+    }
+  }, [availableUpdate, isInstallingUpdate, persist]);
 
   const cancelRecording = useCallback((reason = "Recording cancelled") => {
     if (!recordingRef.current) return;
@@ -538,17 +594,7 @@ export default function App() {
   };
   const installUpdate = async () => {
     if (!availableUpdate || isInstallingUpdate) return;
-    setIsInstallingUpdate(true);
-    setUpdateCheckMessage(`Downloading version ${availableUpdate.version}…`);
-    try {
-      await availableUpdate.downloadAndInstall();
-      setUpdateCheckMessage("Restarting to finish the update…");
-      await relaunch();
-    } catch {
-      setIsInstallingUpdate(false);
-      setUpdateCheckMessage("Update download failed. Please try again.");
-      setMessage("Update download failed. Please try again.");
-    }
+    await installUpdatePackage(availableUpdate);
   };
   const copyTranscript = async (item: Transcript) => {
     try {
@@ -657,12 +703,15 @@ export default function App() {
 
   return (
     <main className="app-shell">
+      <a className="skip-link" href="#main-content">
+        Skip to settings
+      </a>
       <Sidebar
         activeSection={activeSection}
         historyCount={history.length}
         onNavigate={goToSection}
       />
-      <section className="content">
+      <section id="main-content" className="content" tabIndex={-1}>
         <Suspense fallback={null}>
           <SettingsContent
             settings={settings}
@@ -721,11 +770,15 @@ export default function App() {
             }
             onCopyDiagnostics={() => void copyDiagnostics()}
             availableUpdate={availableUpdate}
+            updateDeferred={
+              settings.deferredUpdateVersion === availableUpdate?.version
+            }
             isCheckingForUpdates={isCheckingForUpdates}
             isInstallingUpdate={isInstallingUpdate}
             updateCheckMessage={updateCheckMessage}
             onCheckForUpdates={() => void checkForUpdates()}
             onInstallUpdate={() => void installUpdate()}
+            onDeferUpdate={() => void deferUpdate()}
             onResetLocalData={() => void resetLocalData()}
             onHistoryDisabled={() => setHistory([])}
             settingsSectionRef={setSettingsSection}

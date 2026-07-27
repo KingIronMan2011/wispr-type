@@ -23,7 +23,7 @@ export default function FirstRunOnboarding({
     <main className="onboarding-shell">
       <section className="onboarding-card">
         <div className="onboarding-mark">
-          <Mic size={22} />
+          <Mic size={22} aria-hidden="true" />
         </div>
         <p className="eyebrow">WELCOME TO VESKRI</p>
         <h1>Dictation that stays out of your way.</h1>
@@ -44,6 +44,7 @@ export default function FirstRunOnboarding({
           />
         </label>
         <button
+          type="button"
           className="onboarding-primary"
           onClick={onSaveAndContinue}
           disabled={!apiKey.trim() || saving}
@@ -56,6 +57,7 @@ export default function FirstRunOnboarding({
           Save securely and continue
         </button>
         <button
+          type="button"
           className="onboarding-secondary"
           onClick={onContinueWithoutKey}
           disabled={saving}

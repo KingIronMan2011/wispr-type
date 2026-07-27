@@ -70,6 +70,30 @@ fn polish_text(text: String) -> String {
     polished
 }
 
+fn parse_dictionary_replacements(raw: &str) -> Vec<(&str, &str)> {
+    raw.lines()
+        .filter_map(|line| {
+            let line = line.trim();
+            if line.is_empty() || line.starts_with('#') {
+                return None;
+            }
+            let (from, to) = line.split_once("=>")?;
+            let from = from.trim();
+            if from.is_empty() {
+                return None;
+            }
+            Some((from, to.trim()))
+        })
+        .take(50)
+        .collect()
+}
+
+fn apply_dictionary_replacements(text: String, rules: &str) -> String {
+    parse_dictionary_replacements(rules)
+        .into_iter()
+        .fold(text, |text, (from, to)| text.replace(from, to))
+}
+
 fn paste_text(app: &AppHandle, text: &str, should_paste: bool) -> Result<(), String> {
     if should_paste && platform::auto_paste_supported() {
         let mut enigo = Enigo::new(&EnigoSettings::default()).map_err(|err| {
@@ -169,6 +193,7 @@ pub(crate) async fn transcribe_audio(
     if settings.text_mode == "polished" {
         text = polish_text(text);
     }
+    text = apply_dictionary_replacements(text, &settings.dictionary_replacements);
     if text.is_empty() {
         return Err("No speech was detected.".into());
     }
@@ -198,7 +223,10 @@ pub(crate) async fn transcribe_audio(
 
 #[cfg(test)]
 mod tests {
-    use super::{apply_voice_commands, polish_text};
+    use super::{
+        apply_dictionary_replacements, apply_voice_commands, parse_dictionary_replacements,
+        polish_text,
+    };
 
     #[test]
     fn applies_english_and_german_dictation_commands() {
@@ -213,6 +241,25 @@ mod tests {
         assert_eq!(
             polish_text("hello ,  world\n\nnext line !".into()),
             "Hello, world\n\nnext line!"
+        );
+    }
+
+    #[test]
+    fn dictionary_replacements_are_literal_ordered_and_ignore_invalid_rules() {
+        let rules =
+            "# Comments are ignored\nveskri => Veskri\nGroq => GroqCloud\ninvalid\n=> skipped\n";
+        assert_eq!(
+            apply_dictionary_replacements("veskri uses Groq".into(), rules),
+            "Veskri uses GroqCloud"
+        );
+        assert_eq!(parse_dictionary_replacements(rules).len(), 2);
+    }
+
+    #[test]
+    fn dictionary_replacements_follow_the_rule_order() {
+        assert_eq!(
+            apply_dictionary_replacements("alpha".into(), "alpha => beta\nbeta => gamma"),
+            "gamma"
         );
     }
 }

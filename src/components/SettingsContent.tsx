@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { Update } from "@tauri-apps/plugin-updater";
 import {
   Check,
@@ -59,11 +60,13 @@ type Props = {
   onOpenPrivacyInfo: () => void;
   onCopyDiagnostics: () => void;
   availableUpdate: Update | null;
+  updateDeferred: boolean;
   isCheckingForUpdates: boolean;
   isInstallingUpdate: boolean;
   updateCheckMessage: string | null;
   onCheckForUpdates: () => void;
   onInstallUpdate: () => void;
+  onDeferUpdate: () => void;
   onResetLocalData: () => void;
   onHistoryDisabled: () => void;
   settingsSectionRef: (node: HTMLDivElement | null) => void;
@@ -103,17 +106,20 @@ export default function SettingsContent({
   onOpenPrivacyInfo,
   onCopyDiagnostics,
   availableUpdate,
+  updateDeferred,
   isCheckingForUpdates,
   isInstallingUpdate,
   updateCheckMessage,
   onCheckForUpdates,
   onInstallUpdate,
+  onDeferUpdate,
   onResetLocalData,
   onHistoryDisabled,
   settingsSectionRef,
 }: Props) {
   const meterLevel = recording ? Math.max(inputLevel / 1000, 0.05) : 0.28;
   const persist = (next: Settings) => void onPersist(next);
+  const [showReleaseNotes, setShowReleaseNotes] = useState(false);
 
   return (
     <div ref={settingsSectionRef} className="settings-section" id="settings">
@@ -127,8 +133,10 @@ export default function SettingsContent({
         </div>
         <div
           className={`status ${recording ? "live" : transcribing ? "thinking" : ""}`}
+          role="status"
+          aria-live="polite"
         >
-          <span className="status-dot" />
+          <span className="status-dot" aria-hidden="true" />
           {recording ? "Listening" : transcribing ? "Thinking" : "Ready"}
         </div>
       </header>
@@ -162,11 +170,16 @@ export default function SettingsContent({
           ))}
         </div>
       </section>
-      <p className={`notice ${recording || transcribing ? "active" : ""}`}>
+      <div
+        className={`notice ${recording || transcribing ? "active" : ""}`}
+        role="status"
+        aria-live="polite"
+      >
         {transcribing && <LoaderCircle size={14} className="spin" />}
         {message}
         {canRetry && (
           <button
+            type="button"
             className="notice-retry"
             onClick={onRetry}
             disabled={isRetrying || recording || transcribing}
@@ -174,7 +187,7 @@ export default function SettingsContent({
             {isRetrying ? "Retrying…" : "Retry"}
           </button>
         )}
-      </p>
+      </div>
       <div className="settings-grid">
         <section className="panel shortcut-panel">
           <div className="panel-heading">
@@ -194,7 +207,16 @@ export default function SettingsContent({
                   : ""}
               </p>
             </div>
-            <button className="hotkey" onClick={onCaptureHotkey}>
+            <button
+              className="hotkey"
+              type="button"
+              onClick={onCaptureHotkey}
+              aria-label={
+                capturingHotkey
+                  ? "Press a new global shortcut, or Escape to cancel"
+                  : `Change global shortcut, currently ${displayHotkey(settings.hotkey)}`
+              }
+            >
               {capturingHotkey
                 ? "Press shortcut…"
                 : displayHotkey(settings.hotkey)}
@@ -203,7 +225,7 @@ export default function SettingsContent({
           {!platformCapabilities.globalShortcutSupported && (
             <p className="platform-notice" role="status">
               Your desktop session did not grant a global shortcut. Open Veskri
-              Type from the tray to dictate, or use your desktop environment’s
+              from the tray to dictate, or use your desktop environment’s
               shortcut configuration.
             </p>
           )}
@@ -225,14 +247,22 @@ export default function SettingsContent({
               <strong>Interaction</strong>
               <p>Choose how recording begins and ends.</p>
             </div>
-            <div className="segmented">
+            <div
+              className="segmented"
+              role="group"
+              aria-label="Dictation interaction"
+            >
               <button
+                type="button"
+                aria-pressed={settings.inputMode === "hold"}
                 className={settings.inputMode === "hold" ? "selected" : ""}
                 onClick={() => persist({ ...settings, inputMode: "hold" })}
               >
                 Hold to talk
               </button>
               <button
+                type="button"
+                aria-pressed={settings.inputMode === "toggle"}
                 className={settings.inputMode === "toggle" ? "selected" : ""}
                 onClick={() => persist({ ...settings, inputMode: "toggle" })}
               >
@@ -327,8 +357,17 @@ export default function SettingsContent({
               <strong>After transcription</strong>
               <p>Auto-paste keeps your clipboard unchanged.</p>
             </div>
-            <div className="segmented">
+            <div
+              className="segmented"
+              role="group"
+              aria-label="After transcription"
+            >
               <button
+                type="button"
+                aria-pressed={
+                  platformCapabilities.autoPasteSupported &&
+                  settings.outputAction === "paste"
+                }
                 className={
                   platformCapabilities.autoPasteSupported &&
                   settings.outputAction === "paste"
@@ -346,6 +385,11 @@ export default function SettingsContent({
                 Auto-paste
               </button>
               <button
+                type="button"
+                aria-pressed={
+                  !platformCapabilities.autoPasteSupported ||
+                  settings.outputAction === "copy"
+                }
                 className={
                   !platformCapabilities.autoPasteSupported ||
                   settings.outputAction === "copy"
@@ -372,14 +416,18 @@ export default function SettingsContent({
                 casing.
               </p>
             </div>
-            <div className="segmented">
+            <div className="segmented" role="group" aria-label="Text mode">
               <button
+                type="button"
+                aria-pressed={settings.textMode === "literal"}
                 className={settings.textMode === "literal" ? "selected" : ""}
                 onClick={() => persist({ ...settings, textMode: "literal" })}
               >
                 Literal
               </button>
               <button
+                type="button"
+                aria-pressed={settings.textMode === "polished"}
                 className={settings.textMode === "polished" ? "selected" : ""}
                 onClick={() => persist({ ...settings, textMode: "polished" })}
               >
@@ -405,6 +453,30 @@ export default function SettingsContent({
                 const personalVocabulary = event.target.value;
                 if (personalVocabulary !== settings.personalVocabulary)
                   persist({ ...settings, personalVocabulary });
+              }}
+            />
+          </div>
+          <div className="replacement-row">
+            <div>
+              <strong>Deterministic replacements</strong>
+              <p>
+                Apply literal, case-sensitive rules after transcription. Use one
+                rule per line: <code>from =&gt; to</code>. Rules run from top to
+                bottom.
+              </p>
+            </div>
+            <textarea
+              key={settings.dictionaryReplacements}
+              className="replacement-input"
+              defaultValue={settings.dictionaryReplacements}
+              maxLength={4_000}
+              placeholder={"Whisperflow => Veskri\nGroq cloud => GroqCloud"}
+              aria-label="Deterministic dictionary replacements"
+              spellCheck={false}
+              onBlur={(event) => {
+                const dictionaryReplacements = event.target.value;
+                if (dictionaryReplacements !== settings.dictionaryReplacements)
+                  persist({ ...settings, dictionaryReplacements });
               }}
             />
           </div>
@@ -573,6 +645,22 @@ export default function SettingsContent({
               }
             />
           </div>
+          <div className="setting-row">
+            <div>
+              <strong>Install updates automatically</strong>
+              <p>
+                On launch, download, install, and restart when a newer version
+                is available. Deferred updates stay manual.
+              </p>
+            </div>
+            <Toggle
+              label="Install updates automatically at startup"
+              checked={settings.autoInstallUpdates}
+              onChange={(autoInstallUpdates) =>
+                persist({ ...settings, autoInstallUpdates })
+              }
+            />
+          </div>
           <div className="setting-row update-row">
             <div>
               <strong>App updates</strong>
@@ -616,6 +704,57 @@ export default function SettingsContent({
               )}
             </div>
           </div>
+          {availableUpdate && (
+            <div
+              className="update-details"
+              role="region"
+              aria-label="Available update"
+            >
+              <div className="update-summary">
+                <div>
+                  <strong>Version {availableUpdate.version}</strong>
+                  <p>
+                    {updateDeferred
+                      ? "Installation is deferred. It will not interrupt startup."
+                      : "Ready to download and install."}
+                  </p>
+                </div>
+                {availableUpdate.date && (
+                  <span>
+                    Released{" "}
+                    {new Date(availableUpdate.date).toLocaleDateString()}
+                  </span>
+                )}
+              </div>
+              <div className="update-detail-actions">
+                <button
+                  className="release-notes-toggle"
+                  type="button"
+                  aria-controls="update-release-notes"
+                  aria-expanded={showReleaseNotes}
+                  onClick={() => setShowReleaseNotes((visible) => !visible)}
+                >
+                  {showReleaseNotes ? "Hide release notes" : "Release notes"}
+                </button>
+                {!updateDeferred && (
+                  <button
+                    className="release-notes-toggle"
+                    type="button"
+                    onClick={onDeferUpdate}
+                    disabled={isInstallingUpdate}
+                  >
+                    Install later
+                  </button>
+                )}
+              </div>
+              {showReleaseNotes && (
+                <div id="update-release-notes" className="release-notes">
+                  {availableUpdate.body?.trim() ||
+                    "No release notes were included with this update."}
+                </div>
+              )}
+            </div>
+          )}
         </section>
         <section className="panel privacy-panel">
           <div className="panel-heading">
