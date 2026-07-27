@@ -2,15 +2,40 @@ import { access, readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import process from "node:process";
 
+type PackageMetadata = {
+  author?: string;
+  description?: string;
+  license?: string;
+  name?: string;
+  repository?: { url?: string };
+  version?: string;
+};
+
+type TauriConfig = {
+  bundle?: {
+    license?: string;
+    licenseFile?: string;
+    macOS?: { infoPlist?: string };
+    publisher?: string;
+    homepage?: string;
+  };
+  identifier?: string;
+  version?: string;
+};
+
 const root = resolve(import.meta.dirname, "..");
 const packagePath = resolve(root, "package.json");
 const cargoPath = resolve(root, "src-tauri", "Cargo.toml");
 const tauriPath = resolve(root, "src-tauri", "tauri.conf.json");
 
 const [packageJson, cargoToml, tauriConfig] = await Promise.all([
-  readFile(packagePath, "utf8").then(JSON.parse),
+  readFile(packagePath, "utf8").then(
+    (contents) => JSON.parse(contents) as PackageMetadata,
+  ),
   readFile(cargoPath, "utf8"),
-  readFile(tauriPath, "utf8").then(JSON.parse),
+  readFile(tauriPath, "utf8").then(
+    (contents) => JSON.parse(contents) as TauriConfig,
+  ),
 ]);
 
 const packageStart = cargoToml.indexOf("[package]");
@@ -19,10 +44,10 @@ const cargoPackage = cargoToml.slice(
   packageStart,
   nextSection === -1 ? undefined : nextSection,
 );
-const cargoField = (name) =>
+const cargoField = (name: string): string | undefined =>
   cargoPackage.match(new RegExp(`^${name}\\s*=\\s*"([^"]+)"`, "m"))?.[1];
-const errors = [];
-const expect = (condition, message) => {
+const errors: string[] = [];
+const expect = (condition: boolean, message: string): void => {
   if (!condition) errors.push(message);
 };
 
@@ -53,8 +78,7 @@ expect(
   "Cargo.toml repository URL is incorrect.",
 );
 expect(
-  tauriConfig.bundle?.homepage ===
-    "https://github.com/KingIronMan2011/veskri",
+  tauriConfig.bundle?.homepage === "https://github.com/KingIronMan2011/veskri",
   "Tauri bundle homepage is incorrect.",
 );
 expect(
@@ -62,7 +86,7 @@ expect(
   "Tauri bundle publisher is missing.",
 );
 expect(
-  /^([a-z][a-z0-9-]*\.)+[a-z][a-z0-9-]*$/.test(tauriConfig.identifier),
+  /^([a-z][a-z0-9-]*\.)+[a-z][a-z0-9-]*$/.test(tauriConfig.identifier ?? ""),
   "Tauri identifier must use reverse-domain notation.",
 );
 
