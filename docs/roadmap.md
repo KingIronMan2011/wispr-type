@@ -7,6 +7,7 @@ This is the retained shortlist of product improvements discussed for Veskri.
 - Add a selectable auto-paste strategy: direct typing preserves the clipboard; clipboard paste maximises compatibility with restrictive applications.
 - Add a richer transcript editor, including optional bulk actions and export.
 - Add optional local-only language and text-processing controls for users who need a stricter privacy posture.
+- Add optional local Whisper transcription, including model management and a clear offline-mode experience without a Groq API key.
 - Consider a selectable direct-typing versus clipboard-paste strategy after more cross-platform testing.
 - Explore an opt-in push-to-mute integration for voice calls: mute supported apps such as Discord while Veskri is recording, then restore the prior mute state afterwards.
 
