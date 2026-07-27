@@ -13,6 +13,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: release-${{ inputs.release_tag || github.ref_name }}
+  cancel-in-progress: false
+
 jobs:
   prepare-release:
     runs-on: ubuntu-latest
@@ -37,14 +41,17 @@ jobs:
     needs: prepare-release
     strategy:
       fail-fast: false
+      # Tauri merges multi-platform updater metadata into one latest.json. Serialize
+      # uploads so a platform cannot overwrite another platform's updater entry.
+      max-parallel: 1
       matrix:
         include:
           - runner: windows-latest
             cache_key: windows-x64
-            args: ""
+            args: "--features local-whisper-vulkan"
           - runner: ubuntu-latest
             cache_key: linux-x64
-            args: "--bundles appimage,deb,rpm"
+            args: "--bundles appimage,deb,rpm --features local-whisper-vulkan"
           - runner: macos-26-intel
             cache_key: macos-intel
             args: "--bundles app,dmg --no-sign"
@@ -68,22 +75,76 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             build-essential \
+            libclang-dev \
             file \
             gnupg \
             libasound2-dev \
             libappindicator3-dev \
             librsvg2-dev \
             libssl-dev \
+            libvulkan-dev \
             libwebkit2gtk-4.1-dev \
             libxdo-dev \
             patchelf \
-            rpm
+            rpm \
+            glslc
+      - name: Install Vulkan SDK for Windows local Whisper acceleration
+        if: runner.os == 'Windows'
+        run: |
+          winget install --id LunarG.VulkanSDK --exact --silent --accept-package-agreements --accept-source-agreements
+          winget install --id LLVM.LLVM --exact --silent --accept-package-agreements --accept-source-agreements
+          $vulkanSdk = Get-ChildItem 'C:\VulkanSDK' -Directory | Sort-Object Name -Descending | Select-Object -First 1
+          if (-not $vulkanSdk) { throw 'The Vulkan SDK installation was not found.' }
+          echo "VULKAN_SDK=$($vulkanSdk.FullName)" >> "$env:GITHUB_ENV"
+          echo "$($vulkanSdk.FullName)\Bin" >> "$env:GITHUB_PATH"
+          echo "LIBCLANG_PATH=C:\\Program Files\\LLVM\\bin" >> "$env:GITHUB_ENV"
+      - name: Use a short Windows build path for Vulkan shader generation
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          # whisper.cpp creates deeply nested shader-generator projects. Keep the
+          # Cargo target path short so MSBuild's FileTracker stays below MAX_PATH.
+          'CARGO_TARGET_DIR=D:\\veskri-target' >> $env:GITHUB_ENV
+      - name: Configure Windows C/C++ headers for Local Whisper bindgen
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $clang = 'C:\Program Files\LLVM\bin\clang.exe'
+          $resource = & $clang -print-resource-dir
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vs = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          $msvc = Get-ChildItem "$vs\VC\Tools\MSVC" -Directory | Sort-Object Name -Descending | Select-Object -First 1
+          $sdk = Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\Include' -Directory | Sort-Object Name -Descending | Select-Object -First 1
+          if (-not $resource -or -not $msvc -or -not $sdk) { throw 'Required Windows C/C++ headers were not found.' }
+          $includes = @(
+            "-isystem$resource\include",
+            "-isystem$($msvc.FullName)\include",
+            "-isystem$($sdk.FullName)\ucrt",
+            "-isystem$($sdk.FullName)\shared",
+            "-isystem$($sdk.FullName)\um"
+          ) -join ' '
+          "BINDGEN_EXTRA_CLANG_ARGS_x86_64_pc_windows_msvc=$includes" >> $env:GITHUB_ENV
+      - name: Install macOS local Whisper build dependencies
+        if: runner.os == 'macOS'
+        run: |
+          brew install llvm
+          echo "LIBCLANG_PATH=$(brew --prefix llvm)/lib" >> "$GITHUB_ENV"
       - name: Cache Rust build
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: "src-tauri -> target"
           key: ${{ matrix.cache_key }}
       - run: pnpm install --frozen-lockfile
+      - name: Verify release metadata
+        run: pnpm metadata:check
+      - name: Verify updater signing secret
+        shell: pwsh
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY)) {
+            throw 'Missing required TAURI_SIGNING_PRIVATE_KEY repository secret.'
+          }
       - uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -95,7 +156,7 @@ jobs:
           releaseBody: "Windows and Linux installers, plus unsigned macOS builds for Apple Silicon and Intel. All in-app updater packages are signed."
           releaseDraft: true
           prerelease: false
-          generateReleaseNotes: true
+          generateReleaseNotes: false
           updaterJsonPreferNsis: true
           args: ${{ matrix.args }}
       - name: Import Linux release signing key

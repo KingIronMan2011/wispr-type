@@ -23,6 +23,9 @@ import {
   fallbackPlatformCapabilities,
   hotkeyFromEvent,
   type ApiKeyTestResult,
+  type LocalWhisperCapabilities,
+  type LocalWhisperDownloadProgress,
+  type LocalWhisperModel,
   type RecordingStatus,
   type PlatformCapabilities,
   type Settings,
@@ -35,6 +38,12 @@ const SettingsContent = lazy(() => import("./components/SettingsContent"));
 
 type DiagnosticsContext =
   "general" | "recording" | "microphone-check" | "transcription";
+
+const fallbackLocalWhisperCapabilities: LocalWhisperCapabilities = {
+  cpuAvailable: true,
+  vulkanAvailable: false,
+  availableMemoryMib: 0,
+};
 
 export default function App() {
   if (window.location.hash === "#dictation-overlay") {
@@ -75,6 +84,13 @@ export default function App() {
   >([{ value: "Default microphone", label: "Default microphone" }]);
   const [platformCapabilities, setPlatformCapabilities] =
     useState<PlatformCapabilities>(fallbackPlatformCapabilities);
+  const [localWhisperModels, setLocalWhisperModels] = useState<
+    LocalWhisperModel[]
+  >([]);
+  const [localWhisperCapabilities, setLocalWhisperCapabilities] =
+    useState<LocalWhisperCapabilities>(fallbackLocalWhisperCapabilities);
+  const [localWhisperDownload, setLocalWhisperDownload] =
+    useState<LocalWhisperDownloadProgress | null>(null);
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const [inputLevel, setInputLevel] = useState(0);
@@ -120,25 +136,98 @@ export default function App() {
   );
 
   const refresh = useCallback(async () => {
-    const [saved, items, keyStatus, capabilities] = await Promise.all([
+    const [
+      saved,
+      items,
+      keyStatus,
+      capabilities,
+      localModels,
+      localCapabilities,
+    ] = await Promise.all([
       invoke<Settings>("get_settings"),
       invoke<Transcript[]>("get_history"),
       invoke<boolean>("has_api_key"),
       invoke<PlatformCapabilities | null>("get_platform_capabilities").catch(
         () => null,
       ),
+      invoke<LocalWhisperModel[]>("get_local_whisper_models")
+        .then((models) => (Array.isArray(models) ? models : []))
+        .catch(() => []),
+      invoke<LocalWhisperCapabilities>("get_local_whisper_capabilities")
+        .then(
+          (capabilities) => capabilities ?? fallbackLocalWhisperCapabilities,
+        )
+        .catch(() => fallbackLocalWhisperCapabilities),
     ]);
     settingsRef.current = saved;
     setSettings(saved);
     setHistory(items);
     setHasApiKey(keyStatus);
     setPlatformCapabilities(capabilities ?? fallbackPlatformCapabilities);
+    setLocalWhisperModels(localModels);
+    setLocalWhisperCapabilities(localCapabilities);
     setBootstrapped(true);
   }, []);
+
+  const refreshLocalWhisperModels = useCallback(async () => {
+    const models = await invoke<LocalWhisperModel[]>(
+      "get_local_whisper_models",
+    );
+    setLocalWhisperModels(Array.isArray(models) ? models : []);
+  }, []);
+
+  const downloadLocalWhisperModel = useCallback(
+    async (id: string) => {
+      setLocalWhisperDownload({
+        id: id as Settings["localWhisperModel"],
+        progress: 0,
+      });
+      try {
+        await invoke("download_local_whisper_model", { id });
+        await refreshLocalWhisperModels();
+        setMessage("Local Whisper model is ready for offline dictation.");
+      } catch (error) {
+        setMessage(
+          typeof error === "string"
+            ? error
+            : "Couldn’t download the local Whisper model.",
+        );
+      } finally {
+        setLocalWhisperDownload(null);
+      }
+    },
+    [refreshLocalWhisperModels],
+  );
+
+  const deleteLocalWhisperModel = useCallback(
+    async (id: string) => {
+      try {
+        await invoke("delete_local_whisper_model", { id });
+        await refreshLocalWhisperModels();
+      } catch (error) {
+        setMessage(
+          typeof error === "string"
+            ? error
+            : "Couldn’t delete the local Whisper model.",
+        );
+      }
+    },
+    [refreshLocalWhisperModels],
+  );
 
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    const unlisten = listen<LocalWhisperDownloadProgress>(
+      "local-whisper-download-progress",
+      ({ payload }) => setLocalWhisperDownload(payload),
+    );
+    return () => {
+      void unlisten.then((stop) => stop());
+    };
+  }, []);
 
   useEffect(() => {
     const sections = [settingsSection, historySection].filter(
@@ -384,7 +473,7 @@ export default function App() {
 
   const startRecording = useCallback(async () => {
     if (recordingRef.current || transcribing || isCheckingMicrophone) return;
-    if (!hasApiKey) {
+    if (settingsRef.current.transcriptionProvider === "groq" && !hasApiKey) {
       setMessage("Add your Groq API key before dictating");
       return;
     }
@@ -720,6 +809,16 @@ export default function App() {
             inputLevel={inputLevel}
             message={message}
             platformCapabilities={platformCapabilities}
+            localWhisperModels={localWhisperModels}
+            localWhisperCapabilities={localWhisperCapabilities}
+            downloadingLocalModel={localWhisperDownload?.id ?? null}
+            localWhisperDownloadProgress={
+              localWhisperDownload?.progress ?? null
+            }
+            onDownloadLocalWhisperModel={(id) =>
+              void downloadLocalWhisperModel(id)
+            }
+            onDeleteLocalWhisperModel={(id) => void deleteLocalWhisperModel(id)}
             canRetry={canRetry}
             isRetrying={isRetrying}
             isCheckingMicrophone={isCheckingMicrophone}

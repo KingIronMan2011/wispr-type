@@ -16,6 +16,9 @@ pub(crate) fn history_path(state: &AppState) -> PathBuf {
 pub(crate) fn history_db_path(state: &AppState) -> PathBuf {
     state.data_dir.join("history.db")
 }
+pub(crate) fn local_models_dir(data_dir: &std::path::Path) -> PathBuf {
+    data_dir.join("models")
+}
 pub(crate) fn read_json<T: for<'a> Deserialize<'a>>(path: PathBuf) -> Option<T> {
     fs::read_to_string(path)
         .ok()

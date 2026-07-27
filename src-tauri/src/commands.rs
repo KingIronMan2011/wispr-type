@@ -4,7 +4,7 @@ use crate::{
     platform,
     storage::{
         clear_history_db, history_db_path, history_limit, load_history, load_settings,
-        save_history, secure_entry, settings_path, sort_history, write_json,
+        local_models_dir, save_history, secure_entry, settings_path, sort_history, write_json,
     },
     transcription::copy_to_clipboard,
 };
@@ -51,6 +51,21 @@ pub(crate) fn save_settings(
     }
     if !matches!(settings.text_mode.as_str(), "literal" | "polished") {
         settings.text_mode = "literal".into();
+    }
+    if !matches!(settings.transcription_provider.as_str(), "groq" | "local") {
+        settings.transcription_provider = "groq".into();
+    }
+    if !matches!(
+        settings.local_whisper_model.as_str(),
+        "tiny" | "base" | "small" | "medium"
+    ) {
+        settings.local_whisper_model = "base".into();
+    }
+    if !matches!(
+        settings.local_whisper_acceleration.as_str(),
+        "auto" | "cpu" | "vulkan"
+    ) {
+        settings.local_whisper_acceleration = "auto".into();
     }
     settings.personal_vocabulary = settings
         .personal_vocabulary
@@ -434,6 +449,7 @@ pub(crate) fn reset_local_data(app: AppHandle, state: State<AppState>) -> Result
     let _ = fs::remove_file(settings_path(&state));
     let _ = fs::remove_file(history_db_path(&state));
     let _ = fs::remove_file(state.data_dir.join("history.json"));
+    let _ = fs::remove_dir_all(local_models_dir(&state.data_dir));
     if let Ok(entries) = fs::read_dir(&state.data_dir) {
         for entry in entries.flatten() {
             let path = entry.path();

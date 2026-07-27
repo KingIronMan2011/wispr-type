@@ -22,6 +22,25 @@ Veskri uses Tauri's signed updater. An installed copy checks the repository's
    cross-platform updater packages, then publishes the multi-platform
    `latest.json` feed used by the app.
 
+The workflow creates one draft release first and then serializes each platform
+build. This is deliberate: Tauri merges each platform into the same updater
+metadata file, and parallel uploads could otherwise drop a platform entry.
+
+Before pushing the tag, run:
+
+```powershell
+pnpm metadata:check
+pnpm format:check
+pnpm types
+pnpm lint
+pnpm test:all
+cargo check --manifest-path src-tauri/Cargo.toml --features local-whisper-vulkan
+```
+
+The release job also verifies `TAURI_SIGNING_PRIVATE_KEY` before building. A
+missing or malformed updater-signing secret stops the draft release rather than
+publishing incomplete artifacts.
+
 ## macOS status
 
 The macOS artifacts are not Apple code-signed or notarized yet. They are useful
@@ -73,7 +92,7 @@ Download the artifact, its matching `.asc` file, and the committed public key. T
 ```bash
 gpg --import docs/keys/veskri-linux-release-signing.asc
 gpg --fingerprint BE00817976242ADAF028F67A39593B9B2D74D60A
-gpg --verify Veskri_1.2.3_amd64.deb.asc Veskri_1.2.3_amd64.deb
+gpg --verify Veskri_1.3.0_amd64.deb.asc Veskri_1.3.0_amd64.deb
 ```
 
 Replace the example filename with the downloaded AppImage, Debian, or RPM artifact. A good signature is only trustworthy when its fingerprint matches the value above.

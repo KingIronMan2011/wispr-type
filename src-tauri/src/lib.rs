@@ -1,6 +1,7 @@
 mod app;
 mod audio;
 mod commands;
+mod local_whisper;
 mod models;
 mod overlay;
 mod platform;
@@ -26,6 +27,36 @@ fn get_settings(state: State<AppState>) -> AppSettings {
 #[tauri::command]
 fn get_microphones() -> Result<Vec<audio::AudioDevice>, String> {
     audio::get_microphones()
+}
+#[tauri::command]
+fn get_local_whisper_models(state: State<AppState>) -> Vec<local_whisper::LocalModelInfo> {
+    local_whisper::models(&state.data_dir)
+}
+#[tauri::command]
+fn get_local_whisper_capabilities() -> local_whisper::LocalWhisperCapabilities {
+    local_whisper::capabilities()
+}
+#[tauri::command]
+async fn download_local_whisper_model(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: String,
+) -> Result<(), String> {
+    let progress_id = id.clone();
+    local_whisper::download_model(&state.data_dir, &id, move |progress| {
+        let _ = app.emit(
+            "local-whisper-download-progress",
+            local_whisper::LocalModelDownloadProgress {
+                id: progress_id.clone(),
+                progress,
+            },
+        );
+    })
+    .await
+}
+#[tauri::command]
+fn delete_local_whisper_model(state: State<AppState>, id: String) -> Result<(), String> {
+    local_whisper::delete_model(&state.data_dir, &id)
 }
 #[tauri::command]
 fn get_platform_capabilities(state: State<AppState>) -> platform::PlatformCapabilities {
@@ -311,6 +342,10 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_settings,
             get_microphones,
+            get_local_whisper_models,
+            get_local_whisper_capabilities,
+            download_local_whisper_model,
+            delete_local_whisper_model,
             get_platform_capabilities,
             start_native_recording,
             start_microphone_check,

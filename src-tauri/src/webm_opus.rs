@@ -37,6 +37,31 @@ fn read_pcm(path: &Path) -> Result<(Vec<f32>, u32, usize), String> {
     Ok((samples, sample_rate, channels))
 }
 
+pub(crate) fn read_wav_as_whisper_pcm(path: &Path) -> Result<Vec<f32>, String> {
+    const WHISPER_SAMPLE_RATE: u32 = 16_000;
+    let (samples, sample_rate, channels) = read_pcm(path)?;
+    let mono = samples
+        .chunks(channels)
+        .map(|frame| frame.iter().copied().sum::<f32>() / frame.len().max(1) as f32)
+        .collect::<Vec<_>>();
+    if mono.is_empty() {
+        return Ok(Vec::new());
+    }
+    let output_frames = (mono.len() as u64 * u64::from(WHISPER_SAMPLE_RATE)
+        + u64::from(sample_rate) / 2)
+        / u64::from(sample_rate);
+    let mut output = Vec::with_capacity(output_frames as usize);
+    for output_index in 0..output_frames as usize {
+        let source_position =
+            output_index as f64 * f64::from(sample_rate) / f64::from(WHISPER_SAMPLE_RATE);
+        let left = source_position.floor() as usize;
+        let right = (left + 1).min(mono.len() - 1);
+        let fraction = (source_position - left as f64) as f32;
+        output.push((mono[left] + (mono[right] - mono[left]) * fraction).clamp(-1.0, 1.0));
+    }
+    Ok(output)
+}
+
 fn resample_to_opus_mono(samples: &[f32], sample_rate: u32, channels: usize) -> Vec<f32> {
     let mono = samples
         .chunks(channels)

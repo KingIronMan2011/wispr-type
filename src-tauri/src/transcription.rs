@@ -1,4 +1,5 @@
 use crate::{
+    local_whisper,
     models::{AppState, GroqResponse, Transcript},
     platform,
     storage::{
@@ -10,6 +11,12 @@ use enigo::{Enigo, Keyboard, Settings as EnigoSettings};
 use reqwest::multipart::{Form, Part};
 use tauri::AppHandle;
 use tauri_plugin_clipboard_manager::ClipboardExt;
+
+#[derive(Clone)]
+pub(crate) enum TranscriptionAudio {
+    WebmOpus(Vec<u8>),
+    WhisperPcm(Vec<f32>),
+}
 
 fn apply_voice_commands(text: String) -> String {
     let mut text = text;
@@ -125,16 +132,68 @@ pub(crate) fn copy_to_clipboard(app: AppHandle, text: String) -> Result<(), Stri
 pub(crate) async fn transcribe_audio(
     app: AppHandle,
     state: &AppState,
-    audio: Vec<u8>,
+    audio: TranscriptionAudio,
     output_action: &str,
 ) -> Result<Transcript, String> {
+    let settings = load_settings(state);
+    let result = match audio {
+        TranscriptionAudio::WebmOpus(audio) => transcribe_with_groq(audio, &settings).await?,
+        TranscriptionAudio::WhisperPcm(samples) => {
+            if samples.is_empty() {
+                return Err("No audio was captured.".into());
+            }
+            let (text, language) = local_whisper::transcribe(&state.data_dir, &settings, &samples)?;
+            GroqResponse {
+                text,
+                language: Some(language),
+            }
+        }
+    };
+    let mut text = result.text.trim().to_string();
+    if settings.voice_commands_enabled {
+        text = apply_voice_commands(text);
+    }
+    if settings.text_mode == "polished" {
+        text = polish_text(text);
+    }
+    text = apply_dictionary_replacements(text, &settings.dictionary_replacements);
+    if text.is_empty() {
+        return Err("No speech was detected.".into());
+    }
+    paste_text(&app, &text, output_action == "paste")?;
+    let limit = history_limit(&settings);
+    let item = Transcript {
+        id: format!("{}-{}", Utc::now().timestamp_millis(), text.len()),
+        text,
+        created_at: Utc::now().to_rfc3339(),
+        language: result.language.unwrap_or(settings.language),
+        pinned: false,
+    };
+    if limit == 0 {
+        return Ok(item);
+    }
+    let _guard = state
+        .history_lock
+        .lock()
+        .map_err(|_| "History is unavailable".to_string())?;
+    let mut history = load_history(state);
+    history.insert(0, item.clone());
+    sort_history(&mut history);
+    history.truncate(limit);
+    save_history(state, &history)?;
+    Ok(item)
+}
+
+async fn transcribe_with_groq(
+    audio: Vec<u8>,
+    settings: &crate::models::AppSettings,
+) -> Result<GroqResponse, String> {
     if audio.is_empty() {
         return Err("No audio was captured.".into());
     }
     let api_key = secure_entry()?
         .get_password()
         .map_err(|_| "Add a Groq API key in Settings first.".to_string())?;
-    let settings = load_settings(state);
     let part = Part::bytes(audio)
         .file_name("veskri-dictation.webm")
         .mime_str("audio/webm")
@@ -184,41 +243,8 @@ pub(crate) async fn transcribe_audio(
         };
         return Err(message.into());
     }
-    let result: GroqResponse = serde_json::from_str(&body)
-        .map_err(|_| "Groq returned an unexpected transcription response.".to_string())?;
-    let mut text = result.text.trim().to_string();
-    if settings.voice_commands_enabled {
-        text = apply_voice_commands(text);
-    }
-    if settings.text_mode == "polished" {
-        text = polish_text(text);
-    }
-    text = apply_dictionary_replacements(text, &settings.dictionary_replacements);
-    if text.is_empty() {
-        return Err("No speech was detected.".into());
-    }
-    paste_text(&app, &text, output_action == "paste")?;
-    let limit = history_limit(&settings);
-    let item = Transcript {
-        id: format!("{}-{}", Utc::now().timestamp_millis(), text.len()),
-        text,
-        created_at: Utc::now().to_rfc3339(),
-        language: result.language.unwrap_or(settings.language),
-        pinned: false,
-    };
-    if limit == 0 {
-        return Ok(item);
-    }
-    let _guard = state
-        .history_lock
-        .lock()
-        .map_err(|_| "History is unavailable".to_string())?;
-    let mut history = load_history(state);
-    history.insert(0, item.clone());
-    sort_history(&mut history);
-    history.truncate(limit);
-    save_history(state, &history)?;
-    Ok(item)
+    serde_json::from_str(&body)
+        .map_err(|_| "Groq returned an unexpected transcription response.".to_string())
 }
 
 #[cfg(test)]

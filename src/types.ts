@@ -17,6 +17,9 @@ export type Settings = {
   dictionaryReplacements: string;
   autoInstallUpdates: boolean;
   deferredUpdateVersion: string;
+  transcriptionProvider: "groq" | "local";
+  localWhisperModel: "tiny" | "base" | "small" | "medium";
+  localWhisperAcceleration: "auto" | "cpu" | "vulkan";
 };
 
 export type Transcript = {
@@ -50,6 +53,28 @@ export type ApiKeyTestResult = {
   message: string;
 };
 
+export type LocalWhisperModel = {
+  id: Settings["localWhisperModel"];
+  name: string;
+  description: string;
+  downloadSizeMib: number;
+  estimatedRamMib: number;
+  estimatedVramMib: number;
+  requiredFreeDiskMib: number;
+  installed: boolean;
+};
+
+export type LocalWhisperCapabilities = {
+  cpuAvailable: boolean;
+  vulkanAvailable: boolean;
+  availableMemoryMib: number;
+};
+
+export type LocalWhisperDownloadProgress = {
+  id: Settings["localWhisperModel"];
+  progress: number;
+};
+
 export const fallbackSettings: Settings = {
   hotkey: "Ctrl+Shift+Space",
   inputMode: "hold",
@@ -69,6 +94,9 @@ export const fallbackSettings: Settings = {
   dictionaryReplacements: "",
   autoInstallUpdates: false,
   deferredUpdateVersion: "",
+  transcriptionProvider: "groq",
+  localWhisperModel: "base",
+  localWhisperAcceleration: "auto",
 };
 
 export const fallbackPlatformCapabilities: PlatformCapabilities = {

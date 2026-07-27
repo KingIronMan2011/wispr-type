@@ -1,4 +1,5 @@
 use crate::audio::NativeRecording;
+use crate::transcription::TranscriptionAudio;
 use serde::{Deserialize, Serialize};
 use std::{
     path::PathBuf,
@@ -38,6 +39,12 @@ pub(crate) struct AppSettings {
     pub(crate) auto_install_updates: bool,
     #[serde(default)]
     pub(crate) deferred_update_version: String,
+    #[serde(default = "default_transcription_provider")]
+    pub(crate) transcription_provider: String,
+    #[serde(default = "default_local_whisper_model")]
+    pub(crate) local_whisper_model: String,
+    #[serde(default = "default_local_whisper_acceleration")]
+    pub(crate) local_whisper_acceleration: String,
 }
 
 fn default_history_retention() -> String {
@@ -48,6 +55,15 @@ fn default_notifications_enabled() -> bool {
 }
 fn default_text_mode() -> String {
     "literal".into()
+}
+fn default_transcription_provider() -> String {
+    "groq".into()
+}
+fn default_local_whisper_model() -> String {
+    "base".into()
+}
+fn default_local_whisper_acceleration() -> String {
+    "auto".into()
 }
 
 impl Default for AppSettings {
@@ -71,6 +87,9 @@ impl Default for AppSettings {
             dictionary_replacements: String::new(),
             auto_install_updates: false,
             deferred_update_version: String::new(),
+            transcription_provider: default_transcription_provider(),
+            local_whisper_model: default_local_whisper_model(),
+            local_whisper_acceleration: default_local_whisper_acceleration(),
         }
     }
 }
@@ -98,6 +117,6 @@ pub(crate) struct AppState {
     pub(crate) recording: Mutex<Option<NativeRecording>>,
     pub(crate) recording_level: Arc<AtomicU32>,
     pub(crate) recording_error: Arc<Mutex<Option<String>>>,
-    pub(crate) last_failed_audio: Mutex<Option<Vec<u8>>>,
+    pub(crate) last_failed_audio: Mutex<Option<TranscriptionAudio>>,
     pub(crate) global_shortcut_available: AtomicBool,
 }

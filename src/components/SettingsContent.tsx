@@ -5,6 +5,7 @@ import {
   CircleAlert,
   Copy,
   Cpu,
+  Download,
   Eye,
   EyeOff,
   ExternalLink,
@@ -22,6 +23,8 @@ import { Select, Toggle } from "./Controls";
 import {
   displayHotkey,
   type ApiKeyTestResult,
+  type LocalWhisperCapabilities,
+  type LocalWhisperModel,
   type PlatformCapabilities,
   type Settings,
 } from "../types";
@@ -33,6 +36,12 @@ type Props = {
   inputLevel: number;
   message: string;
   platformCapabilities: PlatformCapabilities;
+  localWhisperModels: LocalWhisperModel[];
+  localWhisperCapabilities: LocalWhisperCapabilities;
+  downloadingLocalModel: string | null;
+  localWhisperDownloadProgress: number | null;
+  onDownloadLocalWhisperModel: (id: string) => void;
+  onDeleteLocalWhisperModel: (id: string) => void;
   canRetry: boolean;
   isRetrying: boolean;
   isCheckingMicrophone: boolean;
@@ -79,6 +88,12 @@ export default function SettingsContent({
   inputLevel,
   message,
   platformCapabilities,
+  localWhisperModels,
+  localWhisperCapabilities,
+  downloadingLocalModel,
+  localWhisperDownloadProgress,
+  onDownloadLocalWhisperModel,
+  onDeleteLocalWhisperModel,
   canRetry,
   isRetrying,
   isCheckingMicrophone,
@@ -335,23 +350,183 @@ export default function SettingsContent({
               <h3>Transcription</h3>
             </div>
           </div>
-          <div className="setting-row">
+          <div className="setting-row provider-row">
             <div>
-              <strong>Groq model</strong>
-              <p>Turbo is optimized for speed.</p>
+              <strong>Transcription provider</strong>
+              <p>
+                Groq is cloud-based. Local Whisper keeps audio on this device.
+              </p>
             </div>
-            <Select
-              label="Model"
-              value={settings.model}
-              onChange={(model) =>
-                persist({ ...settings, model: model as Settings["model"] })
-              }
-              options={[
-                { value: "whisper-large-v3-turbo", label: "Large v3 Turbo" },
-                { value: "whisper-large-v3", label: "Large v3" },
-              ]}
-            />
+            <div
+              className="segmented"
+              role="group"
+              aria-label="Transcription provider"
+            >
+              <button
+                type="button"
+                aria-pressed={settings.transcriptionProvider === "groq"}
+                className={
+                  settings.transcriptionProvider === "groq" ? "selected" : ""
+                }
+                onClick={() =>
+                  persist({ ...settings, transcriptionProvider: "groq" })
+                }
+              >
+                Groq
+              </button>
+              <button
+                type="button"
+                aria-pressed={settings.transcriptionProvider === "local"}
+                className={
+                  settings.transcriptionProvider === "local" ? "selected" : ""
+                }
+                onClick={() =>
+                  persist({ ...settings, transcriptionProvider: "local" })
+                }
+              >
+                Local Whisper
+              </button>
+            </div>
           </div>
+          {settings.transcriptionProvider === "local" ? (
+            <div className="local-whisper-settings">
+              <div className="local-whisper-intro">
+                <div>
+                  <strong>Offline transcription</strong>
+                  <p>
+                    Download one model to dictate without a Groq API key. VRAM
+                    estimates are approximate and vary by driver and audio
+                    length.
+                  </p>
+                  <p className="local-whisper-resource-status">
+                    {localWhisperCapabilities.availableMemoryMib > 0
+                      ? `${localWhisperCapabilities.availableMemoryMib.toLocaleString()} MB RAM currently available`
+                      : "Memory availability is checked before local transcription."}
+                  </p>
+                </div>
+                <Select
+                  label="Local Whisper acceleration"
+                  value={settings.localWhisperAcceleration}
+                  onChange={(localWhisperAcceleration) =>
+                    persist({
+                      ...settings,
+                      localWhisperAcceleration:
+                        localWhisperAcceleration as Settings["localWhisperAcceleration"],
+                    })
+                  }
+                  options={[
+                    { value: "auto", label: "Automatic" },
+                    { value: "cpu", label: "CPU only" },
+                    ...(localWhisperCapabilities.vulkanAvailable
+                      ? [{ value: "vulkan", label: "Vulkan GPU" }]
+                      : []),
+                  ]}
+                />
+              </div>
+              <div
+                className="local-model-list"
+                aria-label="Local Whisper models"
+              >
+                {localWhisperModels.map((model) => {
+                  const selected = settings.localWhisperModel === model.id;
+                  const downloading = downloadingLocalModel === model.id;
+                  return (
+                    <article
+                      key={model.id}
+                      className={selected ? "selected" : undefined}
+                    >
+                      <div className="local-model-copy">
+                        <div>
+                          <strong>{model.name}</strong>
+                          {selected && <span>Selected</span>}
+                        </div>
+                        <p>{model.description}</p>
+                        <dl>
+                          <div>
+                            <dt>Download</dt>
+                            <dd>{model.downloadSizeMib} MB</dd>
+                          </div>
+                          <div>
+                            <dt>RAM</dt>
+                            <dd>≈ {model.estimatedRamMib} MB</dd>
+                          </div>
+                          <div>
+                            <dt>GPU VRAM</dt>
+                            <dd>≈ {model.estimatedVramMib} MB</dd>
+                          </div>
+                          <div>
+                            <dt>Free disk</dt>
+                            <dd>{model.requiredFreeDiskMib} MB</dd>
+                          </div>
+                        </dl>
+                      </div>
+                      <div className="local-model-actions">
+                        <button
+                          type="button"
+                          className="local-model-select"
+                          aria-pressed={selected}
+                          onClick={() =>
+                            persist({
+                              ...settings,
+                              localWhisperModel: model.id,
+                            })
+                          }
+                        >
+                          {selected ? "Selected" : "Use model"}
+                        </button>
+                        {model.installed ? (
+                          <button
+                            type="button"
+                            className="local-model-delete"
+                            onClick={() => onDeleteLocalWhisperModel(model.id)}
+                            aria-label={`Delete ${model.name} local model`}
+                          >
+                            <Trash2 size={13} /> Delete
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            className="local-model-download"
+                            onClick={() =>
+                              onDownloadLocalWhisperModel(model.id)
+                            }
+                            disabled={Boolean(downloadingLocalModel)}
+                          >
+                            {downloading ? (
+                              <LoaderCircle className="spin" size={13} />
+                            ) : (
+                              <Download size={13} />
+                            )}
+                            {downloading
+                              ? `Downloading ${localWhisperDownloadProgress ?? 0}%`
+                              : "Download"}
+                          </button>
+                        )}
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <div className="setting-row">
+              <div>
+                <strong>Groq model</strong>
+                <p>Turbo is optimized for speed.</p>
+              </div>
+              <Select
+                label="Model"
+                value={settings.model}
+                onChange={(model) =>
+                  persist({ ...settings, model: model as Settings["model"] })
+                }
+                options={[
+                  { value: "whisper-large-v3-turbo", label: "Large v3 Turbo" },
+                  { value: "whisper-large-v3", label: "Large v3" },
+                ]}
+              />
+            </div>
+          )}
           <div className="setting-row">
             <div>
               <strong>After transcription</strong>
@@ -796,8 +971,9 @@ export default function SettingsContent({
           </div>
           <div className="privacy-notes">
             <span>
-              Dictation audio is sent to Groq only to create a transcript.
-              Veskri deletes its temporary audio files after processing.
+              {settings.transcriptionProvider === "local"
+                ? "Local Whisper keeps dictation audio on this device. Veskri deletes temporary audio files after processing."
+                : "Dictation audio is sent to Groq only to create a transcript. Veskri deletes temporary audio files after processing."}
             </span>
             <span>
               Transcript history stays in a local SQLite database; your API key
@@ -837,8 +1013,8 @@ export default function SettingsContent({
             <div>
               <strong>Reset local data</strong>
               <p>
-                Delete the key, settings, history, and launch-at-sign-in
-                setting.
+                Delete the key, settings, history, downloaded local models, and
+                launch-at-sign-in setting.
               </p>
             </div>
             <button onClick={onResetLocalData}>
