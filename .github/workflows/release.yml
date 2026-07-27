@@ -53,10 +53,10 @@ jobs:
             cache_key: linux-x64
             args: "--bundles appimage,deb,rpm --features local-whisper-vulkan"
           - runner: macos-26-intel
-            cache_key: macos-intel
+            cache_key: macos-intel-v2
             args: "--bundles app,dmg --no-sign"
           - runner: macos-26
-            cache_key: macos-arm64
+            cache_key: macos-arm64-v2
             args: "--bundles app,dmg --no-sign"
     runs-on: ${{ matrix.runner }}
     steps:
@@ -130,6 +130,9 @@ jobs:
           brew install llvm
           echo "LIBCLANG_PATH=$(brew --prefix llvm)/lib" >> "$GITHUB_ENV"
           echo "MACOSX_DEPLOYMENT_TARGET=26.0" >> "$GITHUB_ENV"
+          echo "CMAKE_OSX_DEPLOYMENT_TARGET=26.0" >> "$GITHUB_ENV"
+          echo "CFLAGS=-mmacosx-version-min=26.0" >> "$GITHUB_ENV"
+          echo "CXXFLAGS=-mmacosx-version-min=26.0" >> "$GITHUB_ENV"
       - name: Cache Rust build
         uses: Swatinem/rust-cache@v2
         with:
