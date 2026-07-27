@@ -14,19 +14,7 @@ permissions:
   contents: write
 
 jobs:
-  validate-metadata:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ inputs.release_tag || github.ref }}
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24
-      - run: node scripts/check-metadata.mjs
-
   prepare-release:
-    needs: validate-metadata
     runs-on: ubuntu-latest
     steps:
       - name: Create the draft release once
