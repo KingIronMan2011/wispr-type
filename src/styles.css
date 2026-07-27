@@ -345,8 +345,6 @@ h1 {
   display: flex;
   align-items: center;
   gap: 7px;
-  margin-left: auto;
-  margin-right: 10px;
   border: 1px solid #7253ab;
   border-radius: 99px;
   background: #35244e;
@@ -359,6 +357,20 @@ h1 {
 }
 .update-button:disabled {
   opacity: 0.72;
+}
+.update-button.secondary {
+  border-color: #403b4a;
+  background: #25242a;
+  color: #c6c2cf;
+}
+.update-button.secondary:hover:not(:disabled) {
+  background: #302e37;
+}
+.update-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
 }
 .command-card {
   min-height: 137px;

@@ -1,6 +1,6 @@
 [package]
 name = "wispr-type"
-version = "1.2.0"
+version = "1.2.1"
 description = "Fast, private desktop dictation powered by Groq"
 authors = ["Wispr Type"]
 license = "MIT"

@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Wispr Type",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "identifier": "com.wisprtype.desktop",
   "build": {
     "beforeDevCommand": "pnpm run dev:frontend",
@@ -37,6 +37,9 @@
     "shortDescription": "Fast, privacy-minded desktop dictation powered by Groq.",
     "longDescription": "Wispr Type is an open-source desktop dictation app for Windows, macOS, and Linux. Hold a shortcut, speak naturally, and continue writing.",
     "icon": ["icons/icon.png", "icons/icon.ico", "icons/icon.icns"],
+    "macOS": {
+      "infoPlist": "Info.plist"
+    },
     "windows": { "wix": { "language": "en-US" } }
   },
   "plugins": {

@@ -62,7 +62,11 @@ export default function App() {
   const [isTestingKey, setIsTestingKey] = useState(false);
   const [keyTest, setKeyTest] = useState<ApiKeyTestResult | null>(null);
   const [availableUpdate, setAvailableUpdate] = useState<Update | null>(null);
+  const [isCheckingForUpdates, setIsCheckingForUpdates] = useState(false);
   const [isInstallingUpdate, setIsInstallingUpdate] = useState(false);
+  const [updateCheckMessage, setUpdateCheckMessage] = useState<string | null>(
+    null,
+  );
   const [microphones, setMicrophones] = useState<
     { value: string; label: string }[]
   >([{ value: "Default microphone", label: "Default microphone" }]);
@@ -82,6 +86,7 @@ export default function App() {
   const recordingRef = useRef(false);
   const settingsRef = useRef<Settings>(fallbackSettings);
   const settingsSaveVersion = useRef(0);
+  const updateCheckInProgress = useRef(false);
 
   const refresh = useCallback(async () => {
     const [saved, items, keyStatus, capabilities] = await Promise.all([
@@ -124,20 +129,43 @@ export default function App() {
     return () => observer.disconnect();
   }, [historySection, settingsSection]);
 
+  const checkForUpdates = useCallback(async (silent = false) => {
+    if (updateCheckInProgress.current) return;
+    updateCheckInProgress.current = true;
+    setIsCheckingForUpdates(true);
+    if (!silent) setUpdateCheckMessage("Checking for updates…");
+    try {
+      const update = await check();
+      setAvailableUpdate(update);
+      if (!silent) {
+        setUpdateCheckMessage(
+          update
+            ? `Version ${update.version} is ready to install.`
+            : "Wispr Type is up to date.",
+        );
+      }
+    } catch {
+      if (!silent) {
+        setUpdateCheckMessage(
+          "Couldn’t check for updates. Check your connection and try again.",
+        );
+      }
+    } finally {
+      updateCheckInProgress.current = false;
+      setIsCheckingForUpdates(false);
+    }
+  }, []);
+
   useEffect(() => {
     let disposed = false;
     const timer = window.setTimeout(() => {
-      void check()
-        .then((update) => {
-          if (!disposed) setAvailableUpdate(update);
-        })
-        .catch(() => undefined);
+      if (!disposed) void checkForUpdates(true);
     }, 1_500);
     return () => {
       disposed = true;
       window.clearTimeout(timer);
     };
-  }, []);
+  }, [checkForUpdates]);
 
   const loadMicrophones = useCallback(async () => {
     try {
@@ -501,11 +529,14 @@ export default function App() {
   const installUpdate = async () => {
     if (!availableUpdate || isInstallingUpdate) return;
     setIsInstallingUpdate(true);
+    setUpdateCheckMessage(`Downloading version ${availableUpdate.version}…`);
     try {
       await availableUpdate.downloadAndInstall();
+      setUpdateCheckMessage("Restarting to finish the update…");
       await relaunch();
     } catch {
       setIsInstallingUpdate(false);
+      setUpdateCheckMessage("Update download failed. Please try again.");
       setMessage("Update download failed. Please try again.");
     }
   };
@@ -669,7 +700,10 @@ export default function App() {
               )
             }
             availableUpdate={availableUpdate}
+            isCheckingForUpdates={isCheckingForUpdates}
             isInstallingUpdate={isInstallingUpdate}
+            updateCheckMessage={updateCheckMessage}
+            onCheckForUpdates={() => void checkForUpdates()}
             onInstallUpdate={() => void installUpdate()}
             onResetLocalData={() => void resetLocalData()}
             onHistoryDisabled={() => setHistory([])}

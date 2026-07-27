@@ -1,0 +1,109 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Quality checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install Linux system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            file \
+            libasound2-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libwebkit2gtk-4.1-dev \
+            libxdo-dev \
+            patchelf \
+            rpm
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "src-tauri -> target"
+          key: ubuntu-quality
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm metadata:check
+      - run: pnpm format:check
+      - run: pnpm types
+      - run: pnpm lint
+      - run: pnpm test
+      - run: pnpm test:rust
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:e2e
+
+  native-build:
+    name: ${{ matrix.name }}
+    needs: quality
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows bundle
+            runner: windows-latest
+            cache_key: windows
+            args: "--bundles msi,nsis --config src-tauri/tauri.ci.conf.json"
+          - name: Linux bundle
+            runner: ubuntu-latest
+            cache_key: linux
+            args: "--bundles appimage,deb,rpm --config src-tauri/tauri.ci.conf.json"
+          - name: macOS Apple Silicon bundle
+            runner: macos-26
+            cache_key: macos-arm64
+            args: "--bundles app,dmg --no-sign --config src-tauri/tauri.ci.conf.json"
+          - name: macOS Intel bundle
+            runner: macos-26-intel
+            cache_key: macos-intel
+            args: "--bundles app,dmg --no-sign --config src-tauri/tauri.ci.conf.json"
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install Linux system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            file \
+            libasound2-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libwebkit2gtk-4.1-dev \
+            libxdo-dev \
+            patchelf \
+            rpm
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "src-tauri -> target"
+          key: ${{ matrix.cache_key }}-bundle
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run build -- ${{ matrix.args }}

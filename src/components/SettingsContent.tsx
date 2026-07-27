@@ -57,7 +57,10 @@ type Props = {
   onOpenGroqKeys: () => void;
   onOpenPrivacyInfo: () => void;
   availableUpdate: Update | null;
+  isCheckingForUpdates: boolean;
   isInstallingUpdate: boolean;
+  updateCheckMessage: string | null;
+  onCheckForUpdates: () => void;
   onInstallUpdate: () => void;
   onResetLocalData: () => void;
   onHistoryDisabled: () => void;
@@ -97,7 +100,10 @@ export default function SettingsContent({
   onOpenGroqKeys,
   onOpenPrivacyInfo,
   availableUpdate,
+  isCheckingForUpdates,
   isInstallingUpdate,
+  updateCheckMessage,
+  onCheckForUpdates,
   onInstallUpdate,
   onResetLocalData,
   onHistoryDisabled,
@@ -122,22 +128,6 @@ export default function SettingsContent({
           <span className="status-dot" />
           {recording ? "Listening" : transcribing ? "Thinking" : "Ready"}
         </div>
-        {availableUpdate && (
-          <button
-            className="update-button"
-            onClick={onInstallUpdate}
-            disabled={isInstallingUpdate}
-          >
-            {isInstallingUpdate ? (
-              <LoaderCircle className="spin" size={14} />
-            ) : (
-              <Sparkles size={14} />
-            )}
-            {isInstallingUpdate
-              ? "Updating…"
-              : `Update ${availableUpdate.version}`}
-          </button>
-        )}
       </header>
       <section className="command-card">
         <div className="command-icon">
@@ -579,6 +569,49 @@ export default function SettingsContent({
                 persist({ ...settings, notificationsEnabled })
               }
             />
+          </div>
+          <div className="setting-row update-row">
+            <div>
+              <strong>App updates</strong>
+              <p>
+                {availableUpdate
+                  ? `Version ${availableUpdate.version} is ready to install.`
+                  : (updateCheckMessage ??
+                    "Checks automatically when Wispr Type starts.")}
+              </p>
+            </div>
+            <div className="update-actions">
+              <button
+                className="update-button secondary"
+                type="button"
+                onClick={onCheckForUpdates}
+                disabled={isCheckingForUpdates || isInstallingUpdate}
+              >
+                {isCheckingForUpdates ? (
+                  <LoaderCircle className="spin" size={14} />
+                ) : (
+                  <Check size={14} />
+                )}
+                {isCheckingForUpdates ? "Checking…" : "Check now"}
+              </button>
+              {availableUpdate && (
+                <button
+                  className="update-button"
+                  type="button"
+                  onClick={onInstallUpdate}
+                  disabled={isInstallingUpdate}
+                >
+                  {isInstallingUpdate ? (
+                    <LoaderCircle className="spin" size={14} />
+                  ) : (
+                    <Sparkles size={14} />
+                  )}
+                  {isInstallingUpdate
+                    ? "Updating…"
+                    : `Install ${availableUpdate.version}`}
+                </button>
+              )}
+            </div>
           </div>
         </section>
         <section className="panel privacy-panel">
