@@ -1,6 +1,6 @@
 # Product roadmap
 
-This is the retained shortlist of product improvements discussed for Wispr Type.
+This is the retained shortlist of product improvements discussed for Veskri.
 
 ## Next up
 

@@ -50,7 +50,7 @@ test("first-run onboarding can be completed without a key", async ({
   page,
 }) => {
   await page.goto("/");
-  await expect(page.getByText("WELCOME TO WISPR TYPE")).toBeVisible();
+  await expect(page.getByText("WELCOME TO VESKRI")).toBeVisible();
   await page.getByRole("button", { name: "Set up later" }).click();
   await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
 });

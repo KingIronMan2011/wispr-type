@@ -1,5 +1,5 @@
 import { History, Settings2, ShieldCheck } from "lucide-react";
-import logo from "../assets/wispr-type-logo.png";
+import logo from "../assets/veskri-logo.png";
 
 export default function Sidebar({
   activeSection,
@@ -13,10 +13,8 @@ export default function Sidebar({
   return (
     <aside className="sidebar">
       <div className="brand">
-        <img src={logo} alt="Wispr Type" />
-        <span>
-          Wispr <b>Type</b>
-        </span>
+        <img src={logo} alt="Veskri" />
+        <span>Veskri</span>
       </div>
       <nav>
         <a
@@ -47,7 +45,7 @@ export default function Sidebar({
           <span>Keys stay on your device</span>
         </div>
         <div className="version">
-          WISPR TYPE <span>{__APP_VERSION__}</span>
+          VESKRI <span>{__APP_VERSION__}</span>
         </div>
       </div>
     </aside>

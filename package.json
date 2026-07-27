@@ -1,5 +1,5 @@
 {
-  "name": "wispr-type",
+  "name": "veskri",
   "private": true,
   "version": "1.2.1",
   "description": "Fast, privacy-minded desktop dictation powered by Groq.",
@@ -14,11 +14,11 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/KingIronMan2011/wispr-type.git"
+    "url": "git+https://github.com/KingIronMan2011/veskri.git"
   },
-  "homepage": "https://github.com/KingIronMan2011/wispr-type#readme",
+  "homepage": "https://github.com/KingIronMan2011/veskri#readme",
   "bugs": {
-    "url": "https://github.com/KingIronMan2011/wispr-type/issues"
+    "url": "https://github.com/KingIronMan2011/veskri/issues"
   },
   "packageManager": "pnpm@11.17.0",
   "engines": {

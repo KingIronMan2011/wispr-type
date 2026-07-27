@@ -72,7 +72,7 @@ pub(crate) fn microphone_permission_hint() -> &'static str {
 pub(crate) fn auto_paste_permission_hint() -> &'static str {
     #[cfg(target_os = "macos")]
     {
-        "Allow Wispr Type in System Settings > Privacy & Security > Accessibility."
+        "Allow Veskri in System Settings > Privacy & Security > Accessibility."
     }
     #[cfg(target_os = "windows")]
     {

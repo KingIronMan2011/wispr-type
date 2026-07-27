@@ -4,5 +4,5 @@
 )]
 
 fn main() {
-    wispr_type_lib::run();
+    veskri_lib::run();
 }

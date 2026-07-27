@@ -222,19 +222,13 @@ pub(crate) async fn test_api_key(api_key: Option<String>) -> ApiKeyTestResult {
 }
 
 pub(crate) fn set_activity_state(app: AppHandle, activity: String) -> Result<(), String> {
-    let label = match activity.as_str() {
-        "recording" => "Listening",
-        "transcribing" => "Transcribing",
-        _ => "Ready",
-    };
-    if let Some(tray) = app.tray_by_id("wispr-type-tray") {
-        tray.set_tooltip(Some(format!("Wispr Type — {label}")))
+    if let Some(tray) = app.tray_by_id("veskri-tray") {
+        tray.set_tooltip(Some("Veskri"))
             .map_err(|err| err.to_string())?;
     }
     update_tray_activity(&app, activity.as_str()).map_err(|err| err.to_string())?;
     if let Some(window) = app.get_webview_window("main") {
-        let title = format!("Wispr Type — {label}");
-        window.set_title(&title).map_err(|err| err.to_string())?;
+        window.set_title("Veskri").map_err(|err| err.to_string())?;
     }
     Ok(())
 }

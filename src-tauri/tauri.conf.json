@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Wispr Type",
+  "productName": "Veskri",
   "version": "1.2.1",
-  "identifier": "com.wisprtype.desktop",
+  "identifier": "dev.kingironman.veskri",
   "build": {
     "beforeDevCommand": "pnpm run dev:frontend",
     "beforeBuildCommand": "pnpm run build:frontend",
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Wispr Type",
+        "title": "Veskri",
         "width": 1120,
         "height": 850,
         "minWidth": 960,
@@ -29,25 +29,30 @@
     "targets": "all",
     "createUpdaterArtifacts": true,
     "publisher": "KingIronMan2011",
-    "homepage": "https://github.com/KingIronMan2011/wispr-type",
+    "homepage": "https://github.com/KingIronMan2011/veskri",
     "copyright": "Copyright © 2026 KingIronMan2011",
     "license": "MIT",
     "licenseFile": "../LICENSE",
     "category": "Productivity",
     "shortDescription": "Fast, privacy-minded desktop dictation powered by Groq.",
-    "longDescription": "Wispr Type is an open-source desktop dictation app for Windows, macOS, and Linux. Hold a shortcut, speak naturally, and continue writing.",
+    "longDescription": "Veskri is an open-source desktop dictation app for Windows, macOS, and Linux. Hold a shortcut, speak naturally, and continue writing.",
     "icon": ["icons/icon.png", "icons/icon.ico", "icons/icon.icns"],
     "macOS": {
       "infoPlist": "Info.plist"
     },
-    "windows": { "wix": { "language": "en-US" } }
+    "windows": {
+      "wix": {
+        "language": "en-US",
+        "upgradeCode": "c061f7a3-65a7-54c0-8128-2dddf7a7a20f"
+      }
+    }
   },
   "plugins": {
     "updater": {
       "createUpdaterArtifacts": true,
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDRFMjNBMEE1QTI3MkM3RjUKUldUMXgzS2lwYUFqVGxaQ3lQK2FyT2U5MFYwYTc1Q2ZpK3BZT1pDSXc2eUo4RG9OKy9lZm1CRjUK",
       "endpoints": [
-        "https://github.com/KingIronMan2011/wispr-type/releases/latest/download/latest.json"
+        "https://github.com/KingIronMan2011/veskri/releases/latest/download/latest.json"
       ],
       "windows": { "installMode": "passive" }
     }

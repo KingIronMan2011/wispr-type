@@ -1,22 +1,22 @@
 [package]
-name = "wispr-type"
+name = "veskri"
 version = "1.2.1"
 description = "Fast, private desktop dictation powered by Groq"
-authors = ["Wispr Type"]
+authors = ["Veskri"]
 license = "MIT"
-repository = "https://github.com/KingIronMan2011/wispr-type"
-homepage = "https://github.com/KingIronMan2011/wispr-type"
+repository = "https://github.com/KingIronMan2011/veskri"
+homepage = "https://github.com/KingIronMan2011/veskri"
 readme = "../README.md"
 keywords = ["dictation", "voice-to-text", "speech-to-text", "whisper", "tauri"]
 categories = ["accessibility", "gui", "multimedia::audio"]
 edition = "2021"
 
 [lib]
-name = "wispr_type_lib"
+name = "veskri_lib"
 crate-type = ["rlib", "cdylib", "staticlib"]
 
 [[bin]]
-name = "wispr-type"
+name = "veskri"
 path = "src/main.rs"
 
 [build-dependencies]

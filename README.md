@@ -1,6 +1,6 @@
-# Wispr Type
+# Veskri
 
-![Wispr Type — Fast voice-to-text that stays out of your way](./docs/banner.png)
+![Veskri — Fast voice-to-text that stays out of your way](./docs/banner.png)
 
 **A fast, privacy-minded desktop dictation app for Windows, macOS, and Linux.**
 
@@ -8,9 +8,9 @@ Hold a shortcut, speak naturally, and have your text copied or pasted into the a
 
 [Features](#features) · [Getting started](#getting-started) · [Privacy](#privacy) · [Development](#development) · [Releases](#releases)
 
-## Why Wispr Type?
+## Why Veskri?
 
-Wispr Type is an open-source desktop app for fast dictation on Windows, macOS, and Linux. It pairs a focused, Linear-inspired settings experience with native Rust audio recording and Groq's Whisper transcription models.
+Veskri is an open-source desktop app for fast dictation on Windows, macOS, and Linux. It pairs a focused, Linear-inspired settings experience with native Rust audio recording and Groq's Whisper transcription models.
 
 The app runs quietly in the system tray, works from any application, and keeps the workflow intentionally simple: dictate, transcribe, continue writing.
 
@@ -34,7 +34,7 @@ The app runs quietly in the system tray, works from any application, and keeps t
 
 Ubuntu and Fedora packages are built in CI as `.deb`, `.rpm`, and AppImage artifacts. Audio recording, secure key storage, history, and copy-to-clipboard work across the supported Linux desktop environments.
 
-X11 supports the full auto-paste workflow. On Wayland, automatic typing into another application is intentionally blocked by many desktop environments. Wispr Type detects this and uses a reliable clipboard fallback, so you can paste with your normal desktop shortcut.
+X11 supports the full auto-paste workflow. On Wayland, automatic typing into another application is intentionally blocked by many desktop environments. Veskri detects this and uses a reliable clipboard fallback, so you can paste with your normal desktop shortcut.
 
 ### macOS support
 
@@ -44,8 +44,8 @@ CI produces `.dmg` and updater artifacts for both Apple Silicon and Intel Macs. 
 
 ### Install a release
 
-1. Download the installer for your operating system from the [GitHub Releases](https://github.com/KingIronMan2011/wispr-type/releases) page.
-2. Install and open **Wispr Type**.
+1. Download the installer for your operating system from the [GitHub Releases](https://github.com/KingIronMan2011/veskri/releases) page.
+2. Install and open **Veskri**.
 3. Create a Groq API key at [console.groq.com/keys](https://console.groq.com/keys), then add it during onboarding.
 4. Hold `Ctrl + Shift + Space`, speak, and release to transcribe.
 
@@ -54,8 +54,8 @@ CI produces `.dmg` and updater artifacts for both Apple Silicon and Intel Macs. 
 For Windows, install Node.js, pnpm, Rust with the MSVC toolchain, Microsoft C++ Build Tools, and WebView2. For macOS, install Xcode Command Line Tools. For Ubuntu or Fedora, install the distribution-specific WebKitGTK and desktop dependencies. Follow Tauri’s [platform prerequisites](https://v2.tauri.app/start/prerequisites/) before building.
 
 ```powershell
-git clone https://github.com/KingIronMan2011/wispr-type.git
-Set-Location wispr-type
+git clone https://github.com/KingIronMan2011/veskri.git
+Set-Location veskri
 corepack enable
 pnpm install
 pnpm dev
@@ -65,7 +65,7 @@ The first run can be completed without an API key, but dictation requires one.
 
 ## Privacy
 
-Wispr Type is designed to make its local data handling clear:
+Veskri is designed to make its local data handling clear:
 
 - Your Groq API key is stored in the operating system credential store (Windows Credential Manager, macOS Keychain, or a Linux keyring), not in the settings file or transcript history.
 - Dictation audio is written to a temporary local file only while it is being recorded and then removed after processing.
@@ -134,8 +134,8 @@ cargo fmt --manifest-path src-tauri/Cargo.toml --check
 
 ## License
 
-Wispr Type is licensed under the [MIT License](./LICENSE).
+Veskri is licensed under the [MIT License](./LICENSE).
 
 ## Acknowledgements
 
-Built with [Tauri](https://tauri.app/), [Groq](https://groq.com/), [React](https://react.dev/), [Vite](https://vite.dev/), and [Rust](https://www.rust-lang.org/). Wispr Type is an independent open-source project and is not affiliated with Wispr, Groq, or the listed technology providers.
+Built with [Tauri](https://tauri.app/), [Groq](https://groq.com/), [React](https://react.dev/), [Vite](https://vite.dev/), and [Rust](https://www.rust-lang.org/).

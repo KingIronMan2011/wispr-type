@@ -1,11 +1,11 @@
-# Releasing Wispr Type
+# Releasing Veskri
 
-Wispr Type uses Tauri's signed updater. An installed copy checks the repository's
+Veskri uses Tauri's signed updater. An installed copy checks the repository's
 `latest.json`, downloads a verified update, then runs the platform's installer.
 
 ## One-time GitHub setup
 
-1. Keep `src-tauri/keys/wispr-type-updater.key` private; it is ignored by Git.
+1. Keep `src-tauri/keys/veskri-updater.key` private; it is ignored by Git.
 2. Create the repository secret `TAURI_SIGNING_PRIVATE_KEY` with the full contents
    of that file. Do not add the key to source control or release assets.
 3. The public counterpart is embedded in `tauri.conf.json` and is safe to commit.
@@ -32,7 +32,7 @@ into the same environment variable used by GitHub Actions before running
 `pnpm build`:
 
 ```powershell
-$env:TAURI_SIGNING_PRIVATE_KEY = Get-Content -Raw src-tauri\keys\wispr-type-updater.key
+$env:TAURI_SIGNING_PRIVATE_KEY = Get-Content -Raw src-tauri\keys\veskri-updater.key
 $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = ""
 pnpm build
 ```

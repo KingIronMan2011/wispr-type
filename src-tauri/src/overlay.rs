@@ -36,7 +36,7 @@ pub(crate) fn create(app: &AppHandle) -> tauri::Result<()> {
         OVERLAY_LABEL,
         WebviewUrl::App("index.html#dictation-overlay".into()),
     )
-    .title("Wispr Type")
+    .title("Veskri")
     .inner_size(286.0, 62.0)
     .min_inner_size(286.0, 62.0)
     .max_inner_size(286.0, 62.0)
@@ -66,7 +66,7 @@ pub(crate) fn show(app: &AppHandle, state: &str, message: impl Into<String>) {
         let _ = window.show();
         let _ = window.set_ignore_cursor_events(true);
     }
-    let _ = app.emit("wispr-overlay", payload);
+    let _ = app.emit("veskri-overlay", payload);
 }
 
 pub(crate) fn hide(app: &AppHandle) {

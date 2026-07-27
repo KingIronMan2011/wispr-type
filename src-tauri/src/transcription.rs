@@ -112,7 +112,7 @@ pub(crate) async fn transcribe_audio(
         .map_err(|_| "Add a Groq API key in Settings first.".to_string())?;
     let settings = load_settings(state);
     let part = Part::bytes(audio)
-        .file_name("wispr-type-dictation.webm")
+        .file_name("veskri-dictation.webm")
         .mime_str("audio/webm")
         .map_err(|err| err.to_string())?;
     let mut form = Form::new()
@@ -145,9 +145,10 @@ pub(crate) async fn transcribe_audio(
             }
         })?;
     let status = response.status();
-    let body = response.text().await.map_err(|_| {
-        "Groq sent a response that Wispr Type couldn’t read. Try again.".to_string()
-    })?;
+    let body = response
+        .text()
+        .await
+        .map_err(|_| "Groq sent a response that Veskri couldn’t read. Try again.".to_string())?;
     if !status.is_success() {
         let message = match status.as_u16() {
             401 => "Groq rejected your API key. Replace it in Settings and try again.",

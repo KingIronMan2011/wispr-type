@@ -199,7 +199,7 @@ export default function SettingsContent({
           </div>
           {!platformCapabilities.globalShortcutSupported && (
             <p className="platform-notice" role="status">
-              Your desktop session did not grant a global shortcut. Open Wispr
+              Your desktop session did not grant a global shortcut. Open Veskri
               Type from the tray to dictate, or use your desktop environment’s
               shortcut configuration.
             </p>
@@ -396,7 +396,7 @@ export default function SettingsContent({
               className="vocabulary-input"
               defaultValue={settings.personalVocabulary}
               maxLength={650}
-              placeholder="e.g. Wispr Type, Groq, your name, TypeScript"
+              placeholder="e.g. Veskri, Groq, your name, TypeScript"
               aria-label="Personal dictionary"
               onBlur={(event) => {
                 const personalVocabulary = event.target.value;
@@ -549,7 +549,7 @@ export default function SettingsContent({
           <div className="setting-row">
             <div>
               <strong>Start in tray</strong>
-              <p>Hide the window when Wispr Type launches.</p>
+              <p>Hide the window when Veskri launches.</p>
             </div>
             <Toggle
               label="Start in tray"
@@ -577,7 +577,7 @@ export default function SettingsContent({
                 {availableUpdate
                   ? `Version ${availableUpdate.version} is ready to install.`
                   : (updateCheckMessage ??
-                    "Checks automatically when Wispr Type starts.")}
+                    "Checks automatically when Veskri starts.")}
               </p>
             </div>
             <div className="update-actions">
@@ -654,8 +654,8 @@ export default function SettingsContent({
           </div>
           <div className="privacy-notes">
             <span>
-              Dictation audio is sent to Groq only to create a transcript. Wispr
-              Type deletes its temporary audio files after processing.
+              Dictation audio is sent to Groq only to create a transcript.
+              Veskri Type deletes its temporary audio files after processing.
             </span>
             <span>
               Transcript history stays in a local SQLite database; your API key

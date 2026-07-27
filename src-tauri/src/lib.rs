@@ -204,7 +204,7 @@ pub fn run() {
                 .clear_targets()
                 .target(tauri_plugin_log::Target::new(
                     tauri_plugin_log::TargetKind::LogDir {
-                        file_name: Some("wispr-type".into()),
+                        file_name: Some("veskri".into()),
                     },
                 ))
                 .level(log::LevelFilter::Info)
@@ -228,7 +228,7 @@ pub fn run() {
                         ShortcutState::Pressed => "pressed",
                         ShortcutState::Released => "released",
                     };
-                    let _ = app.emit("wispr-shortcut", payload);
+                    let _ = app.emit("veskri-shortcut", payload);
                 })
                 .build(),
         )
@@ -238,7 +238,13 @@ pub fn run() {
                 .app_data_dir()
                 .expect("missing app data directory");
             fs::create_dir_all(&state_dir)?;
-            log::info!("Wispr Type started");
+            if let Err(error) = storage::migrate_legacy_installation(&state_dir) {
+                log::warn!("Could not migrate legacy local data: {error}");
+            }
+            if let Err(error) = storage::migrate_legacy_api_key() {
+                log::warn!("Could not migrate the legacy API key: {error}");
+            }
+            log::info!("Veskri started");
             app.manage(AppState {
                 data_dir: state_dir,
                 history_lock: Mutex::new(()),
@@ -327,5 +333,5 @@ pub fn run() {
             copy_to_clipboard
         ])
         .run(tauri::generate_context!())
-        .expect("error while running Wispr Type");
+        .expect("error while running Veskri");
 }

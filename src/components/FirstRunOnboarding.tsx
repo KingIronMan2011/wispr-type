@@ -25,7 +25,7 @@ export default function FirstRunOnboarding({
         <div className="onboarding-mark">
           <Mic size={22} />
         </div>
-        <p className="eyebrow">WELCOME TO WISPR TYPE</p>
+        <p className="eyebrow">WELCOME TO VESKRI</p>
         <h1>Dictation that stays out of your way.</h1>
         <p className="onboarding-copy">
           Add a Groq API key to start dictating. You can change every preference

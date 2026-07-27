@@ -1,4 +1,4 @@
-name: Release Wispr Type
+name: Release Veskri
 
 on:
   push:
@@ -29,7 +29,7 @@ jobs:
 
           gh release create "$RELEASE_TAG" \
             --repo "$GITHUB_REPOSITORY" \
-            --title "Wispr Type $RELEASE_TAG" \
+            --title "Veskri $RELEASE_TAG" \
             --generate-notes \
             --draft
 
@@ -90,7 +90,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
         with:
           tagName: ${{ inputs.release_tag || github.ref_name }}
-          releaseName: "Wispr Type ${{ inputs.release_tag || github.ref_name }}"
+          releaseName: "Veskri ${{ inputs.release_tag || github.ref_name }}"
           releaseBody: "Windows and Linux installers, plus unsigned macOS builds for Apple Silicon and Intel. All in-app updater packages are signed."
           releaseDraft: true
           prerelease: false

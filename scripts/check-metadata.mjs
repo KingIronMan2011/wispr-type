@@ -26,10 +26,7 @@ const expect = (condition, message) => {
   if (!condition) errors.push(message);
 };
 
-expect(
-  packageJson.name === "wispr-type",
-  "package.json name must be wispr-type.",
-);
+expect(packageJson.name === "veskri", "package.json name must be veskri.");
 expect(
   Boolean(packageJson.description),
   "package.json requires a description.",
@@ -48,16 +45,16 @@ expect(
 );
 expect(
   packageJson.repository?.url ===
-    "git+https://github.com/KingIronMan2011/wispr-type.git",
+    "git+https://github.com/KingIronMan2011/veskri.git",
   "package.json repository URL is incorrect.",
 );
 expect(
-  cargoField("repository") === "https://github.com/KingIronMan2011/wispr-type",
+  cargoField("repository") === "https://github.com/KingIronMan2011/veskri",
   "Cargo.toml repository URL is incorrect.",
 );
 expect(
   tauriConfig.bundle?.homepage ===
-    "https://github.com/KingIronMan2011/wispr-type",
+    "https://github.com/KingIronMan2011/veskri",
   "Tauri bundle homepage is incorrect.",
 );
 expect(
@@ -87,5 +84,5 @@ if (errors.length > 0) {
   console.error("Metadata validation failed:\n- " + errors.join("\n- "));
   process.exitCode = 1;
 } else {
-  console.log(`Metadata is valid for Wispr Type v${packageJson.version}.`);
+  console.log(`Metadata is valid for Veskri v${packageJson.version}.`);
 }

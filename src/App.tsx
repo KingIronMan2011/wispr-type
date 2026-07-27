@@ -141,7 +141,7 @@ export default function App() {
         setUpdateCheckMessage(
           update
             ? `Version ${update.version} is ready to install.`
-            : "Wispr Type is up to date.",
+            : "Veskri is up to date.",
         );
       }
     } catch {
@@ -246,7 +246,7 @@ export default function App() {
           if (!granted) granted = (await requestPermission()) === "granted";
           if (granted) {
             sendNotification({
-              title: "Wispr Type",
+              title: "Veskri",
               body: "Dictation is ready.",
             });
           }
@@ -375,7 +375,7 @@ export default function App() {
   }, [isCheckingMicrophone, transcribing]);
 
   useEffect(() => {
-    const unlisten = listen<string>("wispr-shortcut", (event) => {
+    const unlisten = listen<string>("veskri-shortcut", (event) => {
       if (settings.inputMode === "hold") {
         if (event.payload === "pressed") void startRecording();
         else if (event.payload === "released") stopRecording();
@@ -608,7 +608,7 @@ export default function App() {
       setHasApiKey(false);
       setApiKey("");
       setKeyTest(null);
-      setMessage("All Wispr Type data was removed from this device");
+      setMessage("All Veskri data was removed from this device");
     } catch {
       setMessage("Couldn’t remove all local data");
     }

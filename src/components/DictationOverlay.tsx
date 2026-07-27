@@ -22,7 +22,7 @@ export default function DictationOverlay() {
   }, []);
 
   useEffect(() => {
-    const unlisten = listen<OverlayPayload>("wispr-overlay", (event) => {
+    const unlisten = listen<OverlayPayload>("veskri-overlay", (event) => {
       setOverlay(event.payload);
       if (event.payload.state !== "listening") setInputLevel(0);
     });

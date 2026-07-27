@@ -115,8 +115,8 @@ fn webm_header() -> Vec<u8> {
 fn webm_info() -> Vec<u8> {
     let mut info = Vec::new();
     element(&mut info, &[0x2a, 0xd7, 0xb1], &uint(WEBM_TIMECODE_SCALE));
-    element(&mut info, &[0x4d, 0x80], b"Wispr Type");
-    element(&mut info, &[0x57, 0x41], b"Wispr Type");
+    element(&mut info, &[0x4d, 0x80], b"Veskri");
+    element(&mut info, &[0x57, 0x41], b"Veskri");
     let mut output = Vec::new();
     element(&mut output, &[0x15, 0x49, 0xa9, 0x66], &info);
     output
@@ -233,7 +233,7 @@ mod tests {
 
     #[test]
     fn webm_output_contains_an_opus_packet_that_decodes() {
-        let path = env::temp_dir().join(format!("wispr-type-opus-test-{}.wav", std::process::id()));
+        let path = env::temp_dir().join(format!("veskri-opus-test-{}.wav", std::process::id()));
         let spec = hound::WavSpec {
             channels: 1,
             sample_rate: OPUS_SAMPLE_RATE,
