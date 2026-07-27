@@ -1,7 +1,7 @@
 {
   "name": "veskri",
   "private": true,
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "Fast, privacy-minded desktop dictation powered by Groq.",
   "author": "KingIronMan2011",
   "license": "MIT",
