@@ -134,7 +134,7 @@ cargo fmt --manifest-path src-tauri/Cargo.toml --check
 
 ## License
 
-No license file has been selected for this repository yet. Add a license before redistributing or accepting third-party contributions.
+Wispr Type is licensed under the [MIT License](./LICENSE).
 
 ## Acknowledgements
 

@@ -31,7 +31,7 @@ pub(crate) fn create(app: &AppHandle) -> tauri::Result<()> {
     if app.get_webview_window(OVERLAY_LABEL).is_some() {
         return Ok(());
     }
-    let overlay = WebviewWindowBuilder::new(
+    let overlay_builder = WebviewWindowBuilder::new(
         app,
         OVERLAY_LABEL,
         WebviewUrl::App("index.html#dictation-overlay".into()),
@@ -40,14 +40,18 @@ pub(crate) fn create(app: &AppHandle) -> tauri::Result<()> {
     .inner_size(286.0, 62.0)
     .min_inner_size(286.0, 62.0)
     .max_inner_size(286.0, 62.0)
-    .decorations(false)
-    .transparent(true)
-    .shadow(false)
-    .always_on_top(true)
-    .skip_taskbar(true)
-    .focused(false)
-    .visible(false)
-    .build()?;
+    .decorations(false);
+
+    #[cfg(not(target_os = "macos"))]
+    let overlay_builder = overlay_builder.transparent(true);
+
+    let overlay = overlay_builder
+        .shadow(false)
+        .always_on_top(true)
+        .skip_taskbar(true)
+        .focused(false)
+        .visible(false)
+        .build()?;
     overlay.set_ignore_cursor_events(true)?;
     place_at_top_center(app, &overlay);
     Ok(())

@@ -14,7 +14,39 @@ permissions:
   contents: write
 
 jobs:
+  validate-metadata:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.release_tag || github.ref }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - run: node scripts/check-metadata.mjs
+
+  prepare-release:
+    needs: validate-metadata
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create the draft release once
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
+        run: |
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $RELEASE_TAG already exists; uploading missing artifacts."
+            exit 0
+          fi
+
+          gh release create "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Wispr Type $RELEASE_TAG" \
+            --generate-notes \
+            --draft
+
   release:
+    needs: prepare-release
     strategy:
       fail-fast: false
       matrix:
@@ -34,6 +66,8 @@ jobs:
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.release_tag || github.ref }}
       - uses: pnpm/action-setup@v6
         with:
           version: 11
@@ -49,6 +83,7 @@ jobs:
           sudo apt-get install -y \
             build-essential \
             file \
+            libasound2-dev \
             libappindicator3-dev \
             librsvg2-dev \
             libssl-dev \
@@ -71,8 +106,22 @@ jobs:
           tagName: ${{ inputs.release_tag || github.ref_name }}
           releaseName: "Wispr Type ${{ inputs.release_tag || github.ref_name }}"
           releaseBody: "Windows and Linux installers, plus unsigned macOS builds for Apple Silicon and Intel. All in-app updater packages are signed."
-          releaseDraft: false
+          releaseDraft: true
           prerelease: false
           generateReleaseNotes: true
           updaterJsonPreferNsis: true
           args: ${{ matrix.args }}
+
+  publish-release:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish the completed release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
+        run: |
+          gh release edit "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --draft=false \
+            --latest

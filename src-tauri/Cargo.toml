@@ -3,6 +3,12 @@ name = "wispr-type"
 version = "1.2.0"
 description = "Fast, private desktop dictation powered by Groq"
 authors = ["Wispr Type"]
+license = "MIT"
+repository = "https://github.com/KingIronMan2011/wispr-type"
+homepage = "https://github.com/KingIronMan2011/wispr-type"
+readme = "../README.md"
+keywords = ["dictation", "voice-to-text", "speech-to-text", "whisper", "tauri"]
+categories = ["accessibility", "gui", "multimedia::audio"]
 edition = "2021"
 
 [lib]

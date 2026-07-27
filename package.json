@@ -2,6 +2,29 @@
   "name": "wispr-type",
   "private": true,
   "version": "1.2.0",
+  "description": "Fast, privacy-minded desktop dictation powered by Groq.",
+  "author": "KingIronMan2011",
+  "license": "MIT",
+  "keywords": [
+    "dictation",
+    "voice-to-text",
+    "speech-to-text",
+    "whisper",
+    "tauri"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/KingIronMan2011/wispr-type.git"
+  },
+  "homepage": "https://github.com/KingIronMan2011/wispr-type#readme",
+  "bugs": {
+    "url": "https://github.com/KingIronMan2011/wispr-type/issues"
+  },
+  "packageManager": "pnpm@11.17.0",
+  "engines": {
+    "node": ">=24.0.0",
+    "pnpm": ">=11.0.0"
+  },
   "type": "module",
   "scripts": {
     "dev:frontend": "vite",
@@ -16,7 +39,7 @@
     "test": "vitest run",
     "test:e2e": "playwright test",
     "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml",
-    "test:all": "pnpm test && pnpm test:rust && pnpm test:e2e"
+    "test:all": "pnpm metadata:check && pnpm test && pnpm test:rust && pnpm test:e2e"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.11.1",
