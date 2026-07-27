@@ -25,10 +25,10 @@ jobs:
           - runner: ubuntu-latest
             cache_key: linux-x64
             args: "--bundles appimage,deb,rpm"
-          - runner: macos-15-intel
+          - runner: macos-latest-intel
             cache_key: macos-intel
             args: "--bundles app,dmg --no-sign"
-          - runner: macos-15
+          - runner: macos-latest
             cache_key: macos-arm64
             args: "--bundles app,dmg --no-sign"
     runs-on: ${{ matrix.runner }}
