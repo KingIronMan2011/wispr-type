@@ -203,7 +203,7 @@ jobs:
 
   release-cuda:
     needs: prepare-release
-    runs-on: windows-2022
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
         with:
