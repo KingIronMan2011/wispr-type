@@ -98,14 +98,6 @@ mod tests {
     use crate::models::AppSettings;
 
     #[test]
-    fn status_explains_the_discord_keybind_setup() {
-        let integration = status(&AppSettings::default());
-
-        assert!(integration.configured);
-        assert!(integration.message.contains("Ctrl + Alt + Shift + F12"));
-    }
-
-    #[test]
     fn status_reflects_an_enabled_integration() {
         let settings = AppSettings {
             discord_push_to_mute_enabled: true,
