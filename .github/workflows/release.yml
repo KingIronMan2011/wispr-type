@@ -152,6 +152,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+          VESKRI_TAURI_BUILD_SCRIPT: ${{ matrix.build_script }}
         with:
           tagName: ${{ inputs.release_tag || github.ref_name }}
           releaseName: "Veskri ${{ inputs.release_tag || github.ref_name }}"
@@ -160,7 +161,7 @@ jobs:
           prerelease: false
           generateReleaseNotes: false
           updaterJsonPreferNsis: true
-          tauriScript: pnpm run ${{ matrix.build_script }}
+          tauriScript: "pnpm exec tsx scripts/run-tauri-ci-build.ts"
       - name: Import Linux release signing key
         if: runner.os == 'Linux'
         env:
