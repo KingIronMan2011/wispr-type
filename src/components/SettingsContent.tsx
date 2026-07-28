@@ -434,6 +434,9 @@ export default function SettingsContent({
                     ...(localWhisperCapabilities.vulkanAvailable
                       ? [{ value: "vulkan", label: "Vulkan GPU" }]
                       : []),
+                    ...(localWhisperCapabilities.metalAvailable
+                      ? [{ value: "metal", label: "Metal GPU (Apple)" }]
+                      : []),
                   ]}
                 />
               </div>

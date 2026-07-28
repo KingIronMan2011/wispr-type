@@ -45,6 +45,7 @@ const fallbackLocalWhisperCapabilities: LocalWhisperCapabilities = {
   cudaAvailable: false,
   rocmAvailable: false,
   vulkanAvailable: false,
+  metalAvailable: false,
   availableMemoryMib: 0,
 };
 

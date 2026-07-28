@@ -44,13 +44,14 @@ downloaded models as well.
 
 CPU inference is available on Windows, Linux, and macOS. Release builds for
 Windows and Linux also include the optional Vulkan backend, which supports
-compatible AMD, Intel, and NVIDIA GPUs. Choose **Automatic** to use the GPU
-backend compiled into the app, or choose **CPU only** for the most portable
-path.
+compatible AMD, Intel, and NVIDIA GPUs. macOS release builds use the native
+Metal backend for Apple Silicon and supported Intel Macs. Choose **Automatic**
+to use the GPU backend compiled into the app, or choose **CPU only** for the
+most portable path.
 
-Vulkan support is compiled into the Windows and Linux release artifacts; it is
-not currently enabled in macOS release builds. Selecting a GPU backend does not
-guarantee that every driver can create a Vulkan device. If the backend cannot
+Vulkan support is compiled into the Windows and Linux release artifacts, while
+Metal support is compiled into macOS artifacts. Selecting a GPU backend does
+not guarantee that every driver can create a device. If the backend cannot
 initialize, Veskri reports the native error; switch to CPU only to continue.
 
 For NVIDIA systems on Windows or Linux, Veskri also supports a dedicated CUDA
@@ -119,6 +120,15 @@ Verify the installation with `/opt/rocm/bin/hipconfig --full` before building.
 AMD's [ROCm Linux installation guide](https://rocm.docs.amd.com/projects/install-on-linux/en/latest/install/quick-start.html)
 and [hipBLAS installation guide](https://rocm.docs.amd.com/projects/hipBLAS/en/develop/install/Linux_Install_Guide.html)
 list the supported hardware, distributions, and packages.
+
+For a native macOS Metal build, use Xcode Command Line Tools and run:
+
+```bash
+pnpm run build:ci:mac
+```
+
+Metal is built into the macOS app; no separate graphics SDK or user-installed
+runtime is required.
 
 On Linux, install the distribution packages for Clang/libclang, Vulkan headers
 and shader compiler (`libvulkan-dev` and `glslc` on Ubuntu), plus the normal

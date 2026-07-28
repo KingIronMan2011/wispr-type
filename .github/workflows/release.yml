@@ -51,10 +51,10 @@ jobs:
             cache_key: linux-x64
             build_script: build:ci:linux
           - runner: macos-26-intel
-            cache_key: macos-intel-v2
+            cache_key: macos-intel-metal-v3
             build_script: build:ci:mac
           - runner: macos-26
-            cache_key: macos-arm64-v2
+            cache_key: macos-arm64-metal-v3
             build_script: build:ci:mac
     runs-on: ${{ matrix.runner }}
     steps:
@@ -156,7 +156,7 @@ jobs:
         with:
           tagName: ${{ inputs.release_tag || github.ref_name }}
           releaseName: "Veskri ${{ inputs.release_tag || github.ref_name }}"
-          releaseBody: "Windows and Linux Vulkan installers, plus unsigned macOS builds for Apple Silicon and Intel. Native CUDA and ROCm assets are separately named manual-update variants. All in-app updater packages are signed."
+          releaseBody: "Windows and Linux Vulkan installers, plus unsigned macOS Metal builds for Apple Silicon and Intel. Native CUDA and ROCm assets are separately named manual-update variants. All in-app updater packages are signed."
           releaseDraft: true
           prerelease: false
           generateReleaseNotes: false
@@ -236,7 +236,6 @@ jobs:
           "CUDA_PATH=$($cuda.FullName)" >> $env:GITHUB_ENV
           "$($cuda.FullName)\bin" >> $env:GITHUB_PATH
           "LIBCLANG_PATH=C:\Program Files\LLVM\bin" >> $env:GITHUB_ENV
-          "CMAKE_GENERATOR=Visual Studio 17 2022" >> $env:GITHUB_ENV
       - name: Use a short Windows build path for CUDA
         if: runner.os == 'Windows'
         shell: pwsh
@@ -460,13 +459,13 @@ jobs:
         run: |
           trap 'gpgconf --kill gpg-agent || true; rm -rf "$GNUPGHOME"' EXIT
           mapfile -d '' artifacts < <(find src-tauri/target/release/bundle -type f \( -name '*.AppImage' -o -name '*.deb' -o -name '*.rpm' \) -print0)
-          if [ "$artifacts[@]}" -eq 0 ]; then
+          if [ "${#artifacts[@]}" -eq 0 ]; then
             echo "No ROCm release artifacts were found."
             exit 1
           fi
           uploads=()
           for artifact in "${artifacts[@]}"; do
-            variant="${artifact%.*}-rocm.${artifac*.}"
+            variant="${artifact%.*}-rocm.${artifact##*.}"
             cp "$artifact" "$variant"
             gpg --batch --yes --pinentry-mode loopback \
               --passphrase "$LINUX_GPG_PASSPHRASE" \

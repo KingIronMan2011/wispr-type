@@ -18,13 +18,13 @@ Veskri uses Tauri's signed updater. An installed copy checks the repository's
    `src-tauri/tauri.conf.json` to the same semantic version.
 2. Create and push a matching tag, such as `v0.1.1`.
 3. The GitHub Actions release workflow builds and uploads Windows and Linux
-   installers plus macOS `.dmg` files for Apple Silicon and Intel. It signs the
-   cross-platform updater packages, then publishes the multi-platform
-   `latest.json` feed used by the app.
+   installers plus Metal-accelerated macOS `.dmg` files for Apple Silicon and
+   Intel. It signs the cross-platform updater packages, then publishes the
+   multi-platform `latest.json` feed used by the app.
 
-The workflow creates one draft release first and then serializes each platform
-build. This is deliberate: Tauri merges each platform into the same updater
-metadata file, and parallel uploads could otherwise drop a platform entry.
+The workflow creates one draft release first, then runs the platform builds in
+parallel and uploads their artifacts to that draft. It publishes the release
+only after every required build has completed.
 
 Before pushing the tag, run:
 
@@ -37,13 +37,13 @@ pnpm test:all
 cargo check --manifest-path src-tauri/Cargo.toml --features local-whisper-vulkan
 ```
 
-The regular release artifacts deliberately use Vulkan rather than CUDA so one
-Windows/Linux build remains portable across compatible NVIDIA, AMD, and Intel
-GPUs. Every release also includes a separately named Windows CUDA installer and
-Linux ROCm packages for users of those native backends. Those provider-specific
-assets are manual-update variants and are intentionally excluded from the
-in-app updater feed. To build the CUDA variant locally, install the NVIDIA CUDA
-Toolkit and run:
+The regular Windows/Linux release artifacts deliberately use Vulkan rather than
+CUDA so one build remains portable across compatible NVIDIA, AMD, and Intel
+GPUs. The regular macOS artifacts use Metal. Every release also includes a
+separately named Windows CUDA installer and Linux ROCm packages for users of
+those native backends. Those provider-specific assets are manual-update variants
+and are intentionally excluded from the in-app updater feed. To build the CUDA
+variant locally, install the NVIDIA CUDA Toolkit and run:
 
 ```powershell
 pnpm tauri build -- --features local-whisper-cuda
@@ -62,10 +62,11 @@ publishing incomplete artifacts.
 
 ## macOS status
 
-The macOS artifacts are not Apple code-signed or notarized yet. They are useful
-for local testing and early adopters, but Gatekeeper will warn before opening
-them. The existing `TAURI_SIGNING_PRIVATE_KEY` remains required: it signs the
-updater payloads and is separate from Apple application signing.
+The macOS artifacts include native Metal acceleration but are not Apple
+code-signed or notarized yet. They are useful for local testing and early
+adopters, but Gatekeeper will warn before opening them. The existing
+`TAURI_SIGNING_PRIVATE_KEY` remains required: it signs the updater payloads and
+is separate from Apple application signing.
 
 For a local signed release build in PowerShell, load the ignored private key
 into the same environment variable used by GitHub Actions before running
@@ -111,7 +112,7 @@ Download the artifact, its matching `.asc` file, and the committed public key. T
 ```bash
 gpg --import docs/keys/veskri-linux-release-signing.asc
 gpg --fingerprint BE00817976242ADAF028F67A39593B9B2D74D60A
-gpg --verify Veskri_1.4.0_amd64.deb.asc Veskri_1.4.0_amd64.deb
+gpg --verify Veskri_1.4.1_amd64.deb.asc Veskri_1.4.1_amd64.deb
 ```
 
 Replace the example filename with the downloaded AppImage, Debian, or RPM artifact. A good signature is only trustworthy when its fingerprint matches the value above.

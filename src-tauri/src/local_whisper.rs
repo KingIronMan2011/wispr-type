@@ -13,17 +13,16 @@ use whisper_rs::{
     get_lang_str, FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters,
 };
 
-#[cfg(all(feature = "local-whisper-cuda", feature = "local-whisper-vulkan"))]
-compile_error!(
-    "Local Whisper GPU builds must select one backend: local-whisper-cuda or local-whisper-vulkan."
-);
-
 #[cfg(any(
     all(feature = "local-whisper-cuda", feature = "local-whisper-rocm"),
-    all(feature = "local-whisper-rocm", feature = "local-whisper-vulkan")
+    all(feature = "local-whisper-cuda", feature = "local-whisper-vulkan"),
+    all(feature = "local-whisper-cuda", feature = "local-whisper-metal"),
+    all(feature = "local-whisper-rocm", feature = "local-whisper-vulkan"),
+    all(feature = "local-whisper-rocm", feature = "local-whisper-metal"),
+    all(feature = "local-whisper-vulkan", feature = "local-whisper-metal")
 ))]
 compile_error!(
-    "Local Whisper GPU builds must select one backend: local-whisper-cuda, local-whisper-rocm, or local-whisper-vulkan."
+    "Local Whisper GPU builds must select one backend: local-whisper-cuda, local-whisper-rocm, local-whisper-vulkan, or local-whisper-metal."
 );
 
 #[cfg(all(feature = "local-whisper-rocm", not(target_os = "linux")))]
@@ -34,6 +33,9 @@ compile_error!("The Local Whisper ROCm backend is supported only on Linux.");
     not(any(target_os = "linux", target_os = "windows"))
 ))]
 compile_error!("The Local Whisper CUDA backend is supported only on Windows and Linux.");
+
+#[cfg(all(feature = "local-whisper-metal", not(target_os = "macos")))]
+compile_error!("The Local Whisper Metal backend is supported only on macOS.");
 
 #[derive(Clone, Copy)]
 struct LocalModelSpec {
@@ -144,6 +146,7 @@ pub(crate) struct LocalWhisperCapabilities {
     cuda_available: bool,
     rocm_available: bool,
     vulkan_available: bool,
+    metal_available: bool,
     available_memory_mib: u64,
 }
 
@@ -199,6 +202,7 @@ pub(crate) fn capabilities() -> LocalWhisperCapabilities {
         cuda_available: cfg!(feature = "local-whisper-cuda"),
         rocm_available: cfg!(feature = "local-whisper-rocm"),
         vulkan_available: cfg!(feature = "local-whisper-vulkan"),
+        metal_available: cfg!(feature = "local-whisper-metal"),
         available_memory_mib: available_memory_mib(),
     }
 }
@@ -336,10 +340,12 @@ fn should_use_gpu(settings: &AppSettings) -> bool {
         "cuda" => cfg!(feature = "local-whisper-cuda"),
         "rocm" => cfg!(feature = "local-whisper-rocm"),
         "vulkan" => cfg!(feature = "local-whisper-vulkan"),
+        "metal" => cfg!(feature = "local-whisper-metal"),
         "auto" => {
             cfg!(feature = "local-whisper-cuda")
                 || cfg!(feature = "local-whisper-rocm")
                 || cfg!(feature = "local-whisper-vulkan")
+                || cfg!(feature = "local-whisper-metal")
         }
         _ => false,
     }
@@ -523,6 +529,10 @@ mod tests {
             capabilities().rocm_available,
             cfg!(feature = "local-whisper-rocm")
         );
+        assert_eq!(
+            capabilities().metal_available,
+            cfg!(feature = "local-whisper-metal")
+        );
     }
 
     #[test]
@@ -537,6 +547,7 @@ mod tests {
             cfg!(feature = "local-whisper-cuda")
                 || cfg!(feature = "local-whisper-rocm")
                 || cfg!(feature = "local-whisper-vulkan")
+                || cfg!(feature = "local-whisper-metal")
         );
 
         settings.local_whisper_acceleration = "cuda".into();
@@ -555,6 +566,12 @@ mod tests {
         assert_eq!(
             should_use_gpu(&settings),
             cfg!(feature = "local-whisper-rocm")
+        );
+
+        settings.local_whisper_acceleration = "metal".into();
+        assert_eq!(
+            should_use_gpu(&settings),
+            cfg!(feature = "local-whisper-metal")
         );
     }
 

@@ -56,3 +56,22 @@ jobs:
         run: cargo check --manifest-path src-tauri/Cargo.toml --features local-whisper-vulkan
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm test:e2e
+
+  macos-metal:
+    name: macOS Metal Local Whisper
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install LLVM for Whisper bindgen
+        run: |
+          brew install llvm
+          echo "LIBCLANG_PATH=$(brew --prefix llvm)/lib" >> "$GITHUB_ENV"
+          echo "MACOSX_DEPLOYMENT_TARGET=26.0" >> "$GITHUB_ENV"
+          echo "CMAKE_OSX_DEPLOYMENT_TARGET=26.0" >> "$GITHUB_ENV"
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "src-tauri -> target"
+          key: macos-metal
+      - name: Compile the optional Metal Local Whisper backend
+        run: cargo check --manifest-path src-tauri/Cargo.toml --features local-whisper-metal
