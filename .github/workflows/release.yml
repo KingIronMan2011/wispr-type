@@ -46,16 +46,16 @@ jobs:
         include:
           - runner: windows-latest
             cache_key: windows-x64
-            args: "--features local-whisper-vulkan"
+            build_script: build:ci:windows
           - runner: ubuntu-latest
             cache_key: linux-x64
-            args: "--bundles appimage,deb,rpm --features local-whisper-vulkan"
+            build_script: build:ci:linux
           - runner: macos-26-intel
             cache_key: macos-intel-v2
-            args: "--bundles app,dmg --no-sign"
+            build_script: build:ci:mac
           - runner: macos-26
             cache_key: macos-arm64-v2
-            args: "--bundles app,dmg --no-sign"
+            build_script: build:ci:mac
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v7
@@ -160,7 +160,7 @@ jobs:
           prerelease: false
           generateReleaseNotes: false
           updaterJsonPreferNsis: true
-          args: ${{ matrix.args }}
+          tauriScript: pnpm run ${{ matrix.build_script }}
       - name: Import Linux release signing key
         if: runner.os == 'Linux'
         env:
@@ -203,7 +203,16 @@ jobs:
 
   release-cuda:
     needs: prepare-release
-    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        include:
+          - runner: windows-latest
+            cache_key: windows-cuda-x64
+          - runner: ubuntu-latest
+            cache_key: linux-cuda-x64
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -215,6 +224,7 @@ jobs:
           cache: pnpm
       - uses: dtolnay/rust-toolchain@stable
       - name: Install CUDA and Windows Local Whisper build dependencies
+        if: runner.os == 'Windows'
         shell: pwsh
         run: |
           winget install --id Nvidia.CUDA --exact --silent --accept-package-agreements --accept-source-agreements --source winget
@@ -227,9 +237,11 @@ jobs:
           "LIBCLANG_PATH=C:\Program Files\LLVM\bin" >> $env:GITHUB_ENV
           "CMAKE_GENERATOR=Visual Studio 17 2022" >> $env:GITHUB_ENV
       - name: Use a short Windows build path for CUDA
+        if: runner.os == 'Windows'
         shell: pwsh
         run: "'CARGO_TARGET_DIR=D:\\veskri-cuda-target' >> $env:GITHUB_ENV"
       - name: Configure Windows C/C++ headers for Local Whisper bindgen
+        if: runner.os == 'Windows'
         shell: pwsh
         run: |
           $clang = 'C:\Program Files\LLVM\bin\clang.exe'
@@ -247,14 +259,36 @@ jobs:
             "-isystem$($sdk.FullName)\um"
           ) -join ' '
           "BINDGEN_EXTRA_CLANG_ARGS_x86_64_pc_windows_msvc=$includes" >> $env:GITHUB_ENV
+      - name: Install CUDA and Linux Local Whisper build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            libclang-dev \
+            file \
+            gnupg \
+            libasound2-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libwebkit2gtk-4.1-dev \
+            libxdo-dev \
+            nvidia-cuda-toolkit \
+            patchelf \
+            rpm
+          nvcc -V
+          cuda_root="$(dirname "$(dirname "$(readlink -f "$(command -v nvcc)")")")"
+          echo "CUDA_PATH=$cuda_root" >> "$GITHUB_ENV"
       - name: Cache Rust build
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: "src-tauri -> target"
-          key: windows-cuda-x64
+          key: ${{ matrix.cache_key }}
       - run: pnpm install --frozen-lockfile
       - run: pnpm metadata:check
       - name: Verify updater signing secret
+        if: runner.os == 'Windows'
         shell: pwsh
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -263,11 +297,13 @@ jobs:
             throw 'Missing required TAURI_SIGNING_PRIVATE_KEY repository secret.'
           }
       - name: Build the NVIDIA CUDA installer
+        if: runner.os == 'Windows'
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
-        run: pnpm run build -- --bundles nsis --features local-whisper-cuda
+        run: pnpm run build:ci:windows-cuda
       - name: Upload the CUDA installer as a manual-update release asset
+        if: runner.os == 'Windows'
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -285,10 +321,67 @@ jobs:
           $assets = @($cudaInstaller)
           if (Test-Path -LiteralPath $cudaSignature) { $assets += $cudaSignature }
           gh release upload "$env:RELEASE_TAG" --repo "$env:GITHUB_REPOSITORY" --clobber $assets
+      - name: Verify updater signing secret
+        if: runner.os == 'Linux'
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          test -n "$TAURI_SIGNING_PRIVATE_KEY" || {
+            echo "Missing required TAURI_SIGNING_PRIVATE_KEY repository secret."
+            exit 1
+          }
+      - name: Build the NVIDIA CUDA Linux packages
+        if: runner.os == 'Linux'
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+        run: pnpm run build:ci:linux-cuda
+      - name: Import Linux release signing key
+        if: runner.os == 'Linux'
+        env:
+          LINUX_GPG_PRIVATE_KEY: ${{ secrets.LINUX_GPG_PRIVATE_KEY }}
+          LINUX_GPG_FINGERPRINT: BE00817976242ADAF028F67A39593B9B2D74D60A
+        run: |
+          export GNUPGHOME="$RUNNER_TEMP/veskri-cuda-gnupg"
+          install -d -m 700 "$GNUPGHOME"
+          test -n "$LINUX_GPG_PRIVATE_KEY" || {
+            echo "Missing required LINUX_GPG_PRIVATE_KEY repository secret."
+            exit 1
+          }
+          printf '%s' "$LINUX_GPG_PRIVATE_KEY" | gpg --batch --import
+          gpg --batch --list-secret-keys --with-colons "$LINUX_GPG_FINGERPRINT" | grep -q '^sec:'
+          echo "GNUPGHOME=$GNUPGHOME" >> "$GITHUB_ENV"
+      - name: Sign and upload CUDA Linux release artifacts
+        if: runner.os == 'Linux'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LINUX_GPG_PASSPHRASE: ${{ secrets.LINUX_GPG_PASSPHRASE }}
+          LINUX_GPG_FINGERPRINT: BE00817976242ADAF028F67A39593B9B2D74D60A
+          RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
+        run: |
+          trap 'gpgconf --kill gpg-agent || true; rm -rf "$GNUPGHOME"' EXIT
+          mapfile -d '' artifacts < <(find src-tauri/target/release/bundle -type f \( -name '*.AppImage' -o -name '*.deb' -o -name '*.rpm' \) -print0)
+          if [ "${#artifacts[@]}" -eq 0 ]; then
+            echo "No CUDA Linux release artifacts were found."
+            exit 1
+          fi
+          uploads=()
+          for artifact in "${artifacts[@]}"; do
+            variant="${artifact%.*}-cuda.${artifact##*.}"
+            cp "$artifact" "$variant"
+            gpg --batch --yes --pinentry-mode loopback \
+              --passphrase "$LINUX_GPG_PASSPHRASE" \
+              --local-user "$LINUX_GPG_FINGERPRINT" \
+              --armor --detach-sign \
+              --output "${variant}.asc" \
+              "$variant"
+            uploads+=("$variant" "${variant}.asc")
+          done
+          gh release upload "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --clobber "${uploads[@]}"
 
   release-rocm:
     needs: prepare-release
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
         with:
@@ -342,7 +435,7 @@ jobs:
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
-        run: pnpm run build -- --bundles appimage,deb,rpm --features local-whisper-rocm
+        run: pnpm run build:ci:linux-rocm
       - name: Import Linux release signing key
         env:
           LINUX_GPG_PRIVATE_KEY: ${{ secrets.LINUX_GPG_PRIVATE_KEY }}
