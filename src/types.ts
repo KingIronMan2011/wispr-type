@@ -20,7 +20,7 @@ export type Settings = {
   transcriptionProvider: "groq" | "local";
   localWhisperModel:
     "tiny" | "base" | "small" | "medium" | "large-v3-turbo" | "large-v3";
-  localWhisperAcceleration: "auto" | "cpu" | "vulkan";
+  localWhisperAcceleration: "auto" | "cpu" | "cuda" | "rocm" | "vulkan";
   discordPushToMuteEnabled: boolean;
 };
 
@@ -74,6 +74,8 @@ export type LocalWhisperModel = {
 
 export type LocalWhisperCapabilities = {
   cpuAvailable: boolean;
+  cudaAvailable: boolean;
+  rocmAvailable: boolean;
   vulkanAvailable: boolean;
   availableMemoryMib: number;
 };

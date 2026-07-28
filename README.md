@@ -63,7 +63,7 @@ pnpm install
 pnpm dev
 ```
 
-The first run can be completed without an API key. Cloud transcription requires a Groq key; Local Whisper does not. See [Local Whisper](./docs/local-whisper.md) for its build and hardware requirements.
+The first run can be completed without an API key. Cloud transcription requires a Groq key; Local Whisper does not. Local builds support CPU and Vulkan by default, with optional NVIDIA CUDA and Linux AMD ROCm builds. See [Local Whisper](./docs/local-whisper.md) for its build and hardware requirements.
 
 ## Privacy
 

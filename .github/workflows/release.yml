@@ -155,7 +155,7 @@ jobs:
         with:
           tagName: ${{ inputs.release_tag || github.ref_name }}
           releaseName: "Veskri ${{ inputs.release_tag || github.ref_name }}"
-          releaseBody: "Windows and Linux installers, plus unsigned macOS builds for Apple Silicon and Intel. All in-app updater packages are signed."
+          releaseBody: "Windows and Linux Vulkan installers, plus unsigned macOS builds for Apple Silicon and Intel. Native CUDA and ROCm assets are separately named manual-update variants. All in-app updater packages are signed."
           releaseDraft: true
           prerelease: false
           generateReleaseNotes: false
@@ -201,8 +201,191 @@ jobs:
           signatures=("${artifacts[@]/%/.asc}")
           gh release upload "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --clobber "${signatures[@]}"
 
+  release-cuda:
+    needs: prepare-release
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.release_tag || github.ref }}
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install CUDA and Windows Local Whisper build dependencies
+        shell: pwsh
+        run: |
+          winget install --id Nvidia.CUDA --exact --silent --accept-package-agreements --accept-source-agreements --source winget
+          winget install --id LLVM.LLVM --exact --silent --accept-package-agreements --accept-source-agreements --source winget
+          $cuda = Get-ChildItem 'C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA' -Directory | Sort-Object Name -Descending | Select-Object -First 1
+          if (-not $cuda) { throw 'The CUDA Toolkit installation was not found.' }
+          & "$($cuda.FullName)\bin\nvcc.exe" -V
+          "CUDA_PATH=$($cuda.FullName)" >> $env:GITHUB_ENV
+          "$($cuda.FullName)\bin" >> $env:GITHUB_PATH
+          "LIBCLANG_PATH=C:\Program Files\LLVM\bin" >> $env:GITHUB_ENV
+          "CMAKE_GENERATOR=Visual Studio 17 2022" >> $env:GITHUB_ENV
+      - name: Use a short Windows build path for CUDA
+        shell: pwsh
+        run: "'CARGO_TARGET_DIR=D:\\veskri-cuda-target' >> $env:GITHUB_ENV"
+      - name: Configure Windows C/C++ headers for Local Whisper bindgen
+        shell: pwsh
+        run: |
+          $clang = 'C:\Program Files\LLVM\bin\clang.exe'
+          $resource = & $clang -print-resource-dir
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vs = & $vswhere -latest -products * -version '[17.0,18.0)' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          $msvc = Get-ChildItem "$vs\VC\Tools\MSVC" -Directory | Sort-Object Name -Descending | Select-Object -First 1
+          $sdk = Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\Include' -Directory | Sort-Object Name -Descending | Select-Object -First 1
+          if (-not $resource -or -not $msvc -or -not $sdk) { throw 'Required Windows C/C++ headers were not found.' }
+          $includes = @(
+            "-isystem$resource\include",
+            "-isystem$($msvc.FullName)\include",
+            "-isystem$($sdk.FullName)\ucrt",
+            "-isystem$($sdk.FullName)\shared",
+            "-isystem$($sdk.FullName)\um"
+          ) -join ' '
+          "BINDGEN_EXTRA_CLANG_ARGS_x86_64_pc_windows_msvc=$includes" >> $env:GITHUB_ENV
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "src-tauri -> target"
+          key: windows-cuda-x64
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm metadata:check
+      - name: Verify updater signing secret
+        shell: pwsh
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY)) {
+            throw 'Missing required TAURI_SIGNING_PRIVATE_KEY repository secret.'
+          }
+      - name: Build the NVIDIA CUDA installer
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+        run: pnpm tauri build -- --bundles nsis --features local-whisper-cuda
+      - name: Upload the CUDA installer as a manual-update release asset
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
+        run: |
+          $installers = @(Get-ChildItem "$env:CARGO_TARGET_DIR\release\bundle\nsis" -Filter '*-setup.exe')
+          if ($installers.Count -ne 1) { throw 'Expected exactly one CUDA NSIS installer.' }
+          $installer = $installers[0]
+          $cudaName = $installer.Name -replace '-setup\.exe$', '-cuda-setup.exe'
+          $cudaInstaller = Join-Path $installer.DirectoryName $cudaName
+          Copy-Item -LiteralPath $installer.FullName -Destination $cudaInstaller
+          $signature = "$($installer.FullName).sig"
+          $cudaSignature = "$cudaInstaller.sig"
+          if (Test-Path -LiteralPath $signature) { Copy-Item -LiteralPath $signature -Destination $cudaSignature }
+          $assets = @($cudaInstaller)
+          if (Test-Path -LiteralPath $cudaSignature) { $assets += $cudaSignature }
+          gh release upload "$env:RELEASE_TAG" --repo "$env:GITHUB_REPOSITORY" --clobber $assets
+
+  release-rocm:
+    needs: prepare-release
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.release_tag || github.ref }}
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install Linux and ROCm Local Whisper build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            libclang-dev \
+            file \
+            gnupg \
+            libasound2-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libwebkit2gtk-4.1-dev \
+            libxdo-dev \
+            patchelf \
+            rpm \
+            wget
+          wget -q https://repo.radeon.com/amdgpu-install/7.2.4/ubuntu/jammy/amdgpu-install_7.2.4.70204-1_all.deb
+          sudo apt-get install -y ./amdgpu-install_7.2.4.70204-1_all.deb
+          sudo apt-get update
+          sudo amdgpu-install --usecase=hiplibsdk,rocm --no-dkms
+          /opt/rocm/bin/hipconfig --full
+          echo "HIP_PATH=/opt/rocm" >> "$GITHUB_ENV"
+          echo "/opt/rocm/bin" >> "$GITHUB_PATH"
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "src-tauri -> target"
+          key: linux-rocm-x64
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm metadata:check
+      - name: Verify updater signing secret
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          test -n "$TAURI_SIGNING_PRIVATE_KEY" || {
+            echo "Missing required TAURI_SIGNING_PRIVATE_KEY repository secret."
+            exit 1
+          }
+      - name: Build the AMD ROCm installers
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+        run: pnpm tauri build -- --bundles appimage,deb,rpm --features local-whisper-rocm
+      - name: Import Linux release signing key
+        env:
+          LINUX_GPG_PRIVATE_KEY: ${{ secrets.LINUX_GPG_PRIVATE_KEY }}
+          LINUX_GPG_FINGERPRINT: BE00817976242ADAF028F67A39593B9B2D74D60A
+        run: |
+          export GNUPGHOME="$RUNNER_TEMP/veskri-rocm-gnupg"
+          install -d -m 700 "$GNUPGHOME"
+          test -n "$LINUX_GPG_PRIVATE_KEY" || {
+            echo "Missing required LINUX_GPG_PRIVATE_KEY repository secret."
+            exit 1
+          }
+          printf '%s' "$LINUX_GPG_PRIVATE_KEY" | gpg --batch --import
+          gpg --batch --list-secret-keys --with-colons "$LINUX_GPG_FINGERPRINT" | grep -q '^sec:'
+          echo "GNUPGHOME=$GNUPGHOME" >> "$GITHUB_ENV"
+      - name: Sign and upload ROCm release artifacts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LINUX_GPG_PASSPHRASE: ${{ secrets.LINUX_GPG_PASSPHRASE }}
+          LINUX_GPG_FINGERPRINT: BE00817976242ADAF028F67A39593B9B2D74D60A
+          RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
+        run: |
+          trap 'gpgconf --kill gpg-agent || true; rm -rf "$GNUPGHOME"' EXIT
+          mapfile -d '' artifacts < <(find src-tauri/target/release/bundle -type f \( -name '*.AppImage' -o -name '*.deb' -o -name '*.rpm' \) -print0)
+          if [ "${#artifacts[@]}" -eq 0 ]; then
+            echo "No ROCm release artifacts were found."
+            exit 1
+          fi
+          uploads=()
+          for artifact in "${artifacts[@]}"; do
+            variant="${artifact%.*}-rocm.${artifact##*.}"
+            cp "$artifact" "$variant"
+            gpg --batch --yes --pinentry-mode loopback \
+              --passphrase "$LINUX_GPG_PASSPHRASE" \
+              --local-user "$LINUX_GPG_FINGERPRINT" \
+              --armor --detach-sign \
+              --output "${variant}.asc" \
+              "$variant"
+            uploads+=("$variant" "${variant}.asc")
+          done
+          gh release upload "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --clobber "${uploads[@]}"
+
   publish-release:
-    needs: release
+    needs: [release, release-cuda, release-rocm]
     runs-on: ubuntu-latest
     steps:
       - name: Publish the completed release

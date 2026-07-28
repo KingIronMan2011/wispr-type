@@ -37,6 +37,25 @@ pnpm test:all
 cargo check --manifest-path src-tauri/Cargo.toml --features local-whisper-vulkan
 ```
 
+The regular release artifacts deliberately use Vulkan rather than CUDA so one
+Windows/Linux build remains portable across compatible NVIDIA, AMD, and Intel
+GPUs. Every release also includes a separately named Windows CUDA installer and
+Linux ROCm packages for users of those native backends. Those provider-specific
+assets are manual-update variants and are intentionally excluded from the
+in-app updater feed. To build the CUDA variant locally, install the NVIDIA CUDA
+Toolkit and run:
+
+```powershell
+pnpm tauri build -- --features local-whisper-cuda
+```
+
+ROCm/hipBLAS is likewise a separate Linux AMD variant, not part of the updater
+feed. Install ROCm with HIP and hipBLAS, then build it from a Linux environment:
+
+```bash
+pnpm tauri build -- --features local-whisper-rocm
+```
+
 The release job also verifies `TAURI_SIGNING_PRIVATE_KEY` before building. A
 missing or malformed updater-signing secret stops the draft release rather than
 publishing incomplete artifacts.

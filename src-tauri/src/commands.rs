@@ -63,7 +63,7 @@ pub(crate) fn save_settings(
     }
     if !matches!(
         settings.local_whisper_acceleration.as_str(),
-        "auto" | "cpu" | "vulkan"
+        "auto" | "cpu" | "cuda" | "rocm" | "vulkan"
     ) {
         settings.local_whisper_acceleration = "auto".into();
     }

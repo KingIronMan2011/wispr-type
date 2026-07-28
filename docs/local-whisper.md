@@ -16,13 +16,9 @@ dictation.
 | Model          |  Download | Free disk needed | Estimated RAM | Estimated VRAM | Best for                                     |
 | -------------- | --------: | ---------------: | ------------: | -------------: | -------------------------------------------- |
 | Tiny           |    75 MiB |          139 MiB |       350 MiB |        350 MiB | Fast, short notes                            |
-| Tiny English   |    75 MiB |          139 MiB |       350 MiB |        350 MiB | Fast English-only notes                      |
 | Base           |   142 MiB |          206 MiB |       550 MiB |        550 MiB | Everyday dictation                           |
-| Base English   |   142 MiB |          206 MiB |       550 MiB |        550 MiB | Everyday English-only dictation              |
 | Small          |   466 MiB |          530 MiB |     1,200 MiB |      1,200 MiB | Better multilingual accuracy                 |
-| Small English  |   466 MiB |          530 MiB |     1,200 MiB |      1,200 MiB | Better English-only accuracy                 |
 | Medium         | 1,463 MiB |        1,527 MiB |     3,000 MiB |      3,000 MiB | High multilingual accuracy                   |
-| Medium English | 1,463 MiB |        1,527 MiB |     3,000 MiB |      3,000 MiB | High English-only accuracy                   |
 | Large v3 Turbo | 1,550 MiB |        1,614 MiB |     3,500 MiB |      3,500 MiB | Recommended high-quality local transcription |
 | Large v3       | 2,952 MiB |        3,016 MiB |     6,000 MiB |      6,000 MiB | Maximum current multilingual local accuracy  |
 
@@ -48,14 +44,27 @@ downloaded models as well.
 
 CPU inference is available on Windows, Linux, and macOS. Release builds for
 Windows and Linux also include the optional Vulkan backend, which supports
-compatible AMD, Intel, and NVIDIA GPUs. Choose **Automatic** to let the backend
-use Vulkan when it is built into the app, or choose **CPU only** for the most
-portable path.
+compatible AMD, Intel, and NVIDIA GPUs. Choose **Automatic** to use the GPU
+backend compiled into the app, or choose **CPU only** for the most portable
+path.
 
 Vulkan support is compiled into the Windows and Linux release artifacts; it is
 not currently enabled in macOS release builds. Selecting a GPU backend does not
 guarantee that every driver can create a Vulkan device. If the backend cannot
 initialize, Veskri reports the native error; switch to CPU only to continue.
+
+For NVIDIA systems on Windows or Linux, Veskri also supports a dedicated CUDA
+build. CUDA is kept out of the default installers because it requires the
+NVIDIA CUDA runtime and only benefits NVIDIA hardware. A CUDA build exposes
+**CUDA GPU (NVIDIA)** in Settings and uses the same local models and privacy
+guarantees. Build exactly one GPU backend per app: CUDA and Vulkan are
+intentionally mutually exclusive.
+
+For supported AMD GPUs on Linux, a dedicated ROCm/hipBLAS build is available.
+It exposes **ROCm GPU (AMD, Linux)** in Settings. Upstream `whisper-rs` makes
+this backend Linux-only, so it is deliberately absent from Windows and macOS
+builds. ROCm hardware and distribution support is narrower than Vulkan; keep
+the regular Vulkan build as the fallback for unsupported AMD systems.
 
 ## Build requirements
 
@@ -84,6 +93,32 @@ For a Vulkan-enabled local build, install the Vulkan SDK and run:
 ```powershell
 pnpm tauri build -- --features local-whisper-vulkan
 ```
+
+For an NVIDIA CUDA build, install a matching NVIDIA driver and CUDA Toolkit,
+verify the compiler with `nvcc -V`, then build:
+
+```powershell
+pnpm tauri build -- --features local-whisper-cuda
+```
+
+CUDA Toolkit installation is required at build time; end users of a CUDA build
+need a compatible NVIDIA driver and GPU. See NVIDIA's
+[Windows CUDA installation guide](https://docs.nvidia.com/cuda/cuda-installation-guide-microsoft-windows/index.html)
+for supported driver, toolkit, and Visual Studio combinations.
+
+For a Linux AMD ROCm build, first install ROCm including the HIP SDK and
+hipBLAS for your supported distribution and GPU. The standard installation
+path is `/opt/rocm`; if yours differs, set `HIP_PATH` to that location before
+building. Then run:
+
+```bash
+pnpm tauri build -- --features local-whisper-rocm
+```
+
+Verify the installation with `/opt/rocm/bin/hipconfig --full` before building.
+AMD's [ROCm Linux installation guide](https://rocm.docs.amd.com/projects/install-on-linux/en/latest/install/quick-start.html)
+and [hipBLAS installation guide](https://rocm.docs.amd.com/projects/hipBLAS/en/develop/install/Linux_Install_Guide.html)
+list the supported hardware, distributions, and packages.
 
 On Linux, install the distribution packages for Clang/libclang, Vulkan headers
 and shader compiler (`libvulkan-dev` and `glslc` on Ubuntu), plus the normal

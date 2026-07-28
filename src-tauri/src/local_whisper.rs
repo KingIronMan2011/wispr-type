@@ -13,6 +13,28 @@ use whisper_rs::{
     get_lang_str, FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters,
 };
 
+#[cfg(all(feature = "local-whisper-cuda", feature = "local-whisper-vulkan"))]
+compile_error!(
+    "Local Whisper GPU builds must select one backend: local-whisper-cuda or local-whisper-vulkan."
+);
+
+#[cfg(any(
+    all(feature = "local-whisper-cuda", feature = "local-whisper-rocm"),
+    all(feature = "local-whisper-rocm", feature = "local-whisper-vulkan")
+))]
+compile_error!(
+    "Local Whisper GPU builds must select one backend: local-whisper-cuda, local-whisper-rocm, or local-whisper-vulkan."
+);
+
+#[cfg(all(feature = "local-whisper-rocm", not(target_os = "linux")))]
+compile_error!("The Local Whisper ROCm backend is supported only on Linux.");
+
+#[cfg(all(
+    feature = "local-whisper-cuda",
+    not(any(target_os = "linux", target_os = "windows"))
+))]
+compile_error!("The Local Whisper CUDA backend is supported only on Windows and Linux.");
+
 #[derive(Clone, Copy)]
 struct LocalModelSpec {
     id: &'static str,
@@ -119,6 +141,8 @@ pub(crate) struct LocalModelInfo {
 #[serde(rename_all = "camelCase")]
 pub(crate) struct LocalWhisperCapabilities {
     cpu_available: bool,
+    cuda_available: bool,
+    rocm_available: bool,
     vulkan_available: bool,
     available_memory_mib: u64,
 }
@@ -172,6 +196,8 @@ pub(crate) fn models(data_dir: &Path) -> Vec<LocalModelInfo> {
 pub(crate) fn capabilities() -> LocalWhisperCapabilities {
     LocalWhisperCapabilities {
         cpu_available: true,
+        cuda_available: cfg!(feature = "local-whisper-cuda"),
+        rocm_available: cfg!(feature = "local-whisper-rocm"),
         vulkan_available: cfg!(feature = "local-whisper-vulkan"),
         available_memory_mib: available_memory_mib(),
     }
@@ -306,7 +332,17 @@ pub(crate) fn delete_model(data_dir: &Path, id: &str) -> Result<(), String> {
 }
 
 fn should_use_gpu(settings: &AppSettings) -> bool {
-    cfg!(feature = "local-whisper-vulkan") && settings.local_whisper_acceleration != "cpu"
+    match settings.local_whisper_acceleration.as_str() {
+        "cuda" => cfg!(feature = "local-whisper-cuda"),
+        "rocm" => cfg!(feature = "local-whisper-rocm"),
+        "vulkan" => cfg!(feature = "local-whisper-vulkan"),
+        "auto" => {
+            cfg!(feature = "local-whisper-cuda")
+                || cfg!(feature = "local-whisper-rocm")
+                || cfg!(feature = "local-whisper-vulkan")
+        }
+        _ => false,
+    }
 }
 
 pub(crate) fn transcribe(
@@ -447,7 +483,11 @@ fn sha256_file(path: &Path) -> Result<String, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{bytes_to_mib, capabilities, models, required_download_space, sha256_file, MODELS};
+    use super::{
+        bytes_to_mib, capabilities, models, required_download_space, sha256_file, should_use_gpu,
+        MODELS,
+    };
+    use crate::models::AppSettings;
     use std::{env, fs};
 
     #[test]
@@ -471,6 +511,51 @@ mod tests {
             .all(|model| required_download_space(model) > model.size_bytes));
         assert_eq!(bytes_to_mib(1_048_576), 1);
         assert!(capabilities().cpu_available);
+        assert_eq!(
+            capabilities().cuda_available,
+            cfg!(feature = "local-whisper-cuda")
+        );
+        assert_eq!(
+            capabilities().vulkan_available,
+            cfg!(feature = "local-whisper-vulkan")
+        );
+        assert_eq!(
+            capabilities().rocm_available,
+            cfg!(feature = "local-whisper-rocm")
+        );
+    }
+
+    #[test]
+    fn selects_only_the_gpu_backend_compiled_into_this_build() {
+        let mut settings = AppSettings::default();
+        settings.local_whisper_acceleration = "cpu".into();
+        assert!(!should_use_gpu(&settings));
+
+        settings.local_whisper_acceleration = "auto".into();
+        assert_eq!(
+            should_use_gpu(&settings),
+            cfg!(feature = "local-whisper-cuda")
+                || cfg!(feature = "local-whisper-rocm")
+                || cfg!(feature = "local-whisper-vulkan")
+        );
+
+        settings.local_whisper_acceleration = "cuda".into();
+        assert_eq!(
+            should_use_gpu(&settings),
+            cfg!(feature = "local-whisper-cuda")
+        );
+
+        settings.local_whisper_acceleration = "vulkan".into();
+        assert_eq!(
+            should_use_gpu(&settings),
+            cfg!(feature = "local-whisper-vulkan")
+        );
+
+        settings.local_whisper_acceleration = "rocm".into();
+        assert_eq!(
+            should_use_gpu(&settings),
+            cfg!(feature = "local-whisper-rocm")
+        );
     }
 
     #[test]

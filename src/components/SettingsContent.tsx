@@ -77,6 +77,7 @@ type Props = {
   isCheckingForUpdates: boolean;
   isInstallingUpdate: boolean;
   updateCheckMessage: string | null;
+  usesManualGpuUpdates: boolean;
   onCheckForUpdates: () => void;
   onInstallUpdate: () => void;
   onDeferUpdate: () => void;
@@ -131,6 +132,7 @@ export default function SettingsContent({
   isCheckingForUpdates,
   isInstallingUpdate,
   updateCheckMessage,
+  usesManualGpuUpdates,
   onCheckForUpdates,
   onInstallUpdate,
   onDeferUpdate,
@@ -423,6 +425,12 @@ export default function SettingsContent({
                   options={[
                     { value: "auto", label: "Automatic" },
                     { value: "cpu", label: "CPU only" },
+                    ...(localWhisperCapabilities.cudaAvailable
+                      ? [{ value: "cuda", label: "CUDA GPU (NVIDIA)" }]
+                      : []),
+                    ...(localWhisperCapabilities.rocmAvailable
+                      ? [{ value: "rocm", label: "ROCm GPU (AMD, Linux)" }]
+                      : []),
                     ...(localWhisperCapabilities.vulkanAvailable
                       ? [{ value: "vulkan", label: "Vulkan GPU" }]
                       : []),
@@ -877,30 +885,34 @@ export default function SettingsContent({
               }
             />
           </div>
-          <div className="setting-row">
-            <div>
-              <strong>Install updates automatically</strong>
-              <p>
-                On launch, download, install, and restart when a newer version
-                is available. Deferred updates stay manual.
-              </p>
+          {!usesManualGpuUpdates && (
+            <div className="setting-row">
+              <div>
+                <strong>Install updates automatically</strong>
+                <p>
+                  On launch, download, install, and restart when a newer version
+                  is available. Deferred updates stay manual.
+                </p>
+              </div>
+              <Toggle
+                label="Install updates automatically at startup"
+                checked={settings.autoInstallUpdates}
+                onChange={(autoInstallUpdates) =>
+                  persist({ ...settings, autoInstallUpdates })
+                }
+              />
             </div>
-            <Toggle
-              label="Install updates automatically at startup"
-              checked={settings.autoInstallUpdates}
-              onChange={(autoInstallUpdates) =>
-                persist({ ...settings, autoInstallUpdates })
-              }
-            />
-          </div>
+          )}
           <div className="setting-row update-row">
             <div>
               <strong>App updates</strong>
               <p>
-                {availableUpdate
-                  ? `Version ${availableUpdate.version} is ready to install.`
-                  : (updateCheckMessage ??
-                    "Checks automatically when Veskri starts.")}
+                {usesManualGpuUpdates
+                  ? "This CUDA or ROCm build is updated manually from GitHub Releases."
+                  : availableUpdate
+                    ? `Version ${availableUpdate.version} is ready to install.`
+                    : (updateCheckMessage ??
+                      "Checks automatically when Veskri starts.")}
               </p>
             </div>
             <div className="update-actions">
@@ -908,14 +920,22 @@ export default function SettingsContent({
                 className="update-button secondary"
                 type="button"
                 onClick={onCheckForUpdates}
-                disabled={isCheckingForUpdates || isInstallingUpdate}
+                disabled={
+                  usesManualGpuUpdates ||
+                  isCheckingForUpdates ||
+                  isInstallingUpdate
+                }
               >
                 {isCheckingForUpdates ? (
                   <LoaderCircle className="spin" size={14} />
                 ) : (
                   <Check size={14} />
                 )}
-                {isCheckingForUpdates ? "Checking…" : "Check now"}
+                {usesManualGpuUpdates
+                  ? "Manual build"
+                  : isCheckingForUpdates
+                    ? "Checking…"
+                    : "Check now"}
               </button>
               {availableUpdate && (
                 <button

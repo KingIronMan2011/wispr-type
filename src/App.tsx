@@ -42,6 +42,8 @@ type DiagnosticsContext =
 
 const fallbackLocalWhisperCapabilities: LocalWhisperCapabilities = {
   cpuAvailable: true,
+  cudaAvailable: false,
+  rocmAvailable: false,
   vulkanAvailable: false,
   availableMemoryMib: 0,
 };
@@ -117,6 +119,9 @@ export default function App() {
   const settingsRef = useRef<Settings>(fallbackSettings);
   const settingsSaveVersion = useRef(0);
   const updateCheckInProgress = useRef(false);
+  const usesManualGpuUpdates =
+    localWhisperCapabilities.cudaAvailable ||
+    localWhisperCapabilities.rocmAvailable;
 
   const installUpdatePackage = useCallback(
     async (update: Update, automatic = false) => {
@@ -268,6 +273,13 @@ export default function App() {
   const checkForUpdates = useCallback(
     async (silent = false, startup = false) => {
       if (updateCheckInProgress.current) return;
+      if (usesManualGpuUpdates) {
+        setAvailableUpdate(null);
+        setUpdateCheckMessage(
+          "This native GPU build is updated manually from GitHub Releases.",
+        );
+        return;
+      }
       updateCheckInProgress.current = true;
       setIsCheckingForUpdates(true);
       if (!silent) setUpdateCheckMessage("Checking for updates…");
@@ -305,7 +317,7 @@ export default function App() {
         setIsCheckingForUpdates(false);
       }
     },
-    [installUpdatePackage],
+    [installUpdatePackage, usesManualGpuUpdates],
   );
 
   useEffect(() => {
@@ -1022,6 +1034,7 @@ export default function App() {
             isCheckingForUpdates={isCheckingForUpdates}
             isInstallingUpdate={isInstallingUpdate}
             updateCheckMessage={updateCheckMessage}
+            usesManualGpuUpdates={usesManualGpuUpdates}
             onCheckForUpdates={() => void checkForUpdates()}
             onInstallUpdate={() => void installUpdate()}
             onDeferUpdate={() => void deferUpdate()}

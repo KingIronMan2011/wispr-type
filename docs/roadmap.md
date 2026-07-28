@@ -4,7 +4,7 @@ This is the retained shortlist of product improvements discussed for Veskri.
 
 ## Next up
 
-- Expand Local Whisper with optional native GPU backends: CUDA for NVIDIA, HIPBLAS/ROCm for AMD, and Intel SYCL/oneAPI for Intel GPUs. Keep CPU and Vulkan as portable fallbacks, and avoid bloating the default installer through provider-specific build variants or optional downloads.
+- Validate and distribute optional Local Whisper GPU variants: CUDA for NVIDIA and HIPBLAS/ROCm for AMD are available as source builds; add release-artifact strategy and hardware validation without bloating the default installer. Add Intel SYCL/oneAPI later. Keep CPU and Vulkan as portable fallbacks.
 
 ## Distribution follow-up
 

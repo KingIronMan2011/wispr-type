@@ -17,6 +17,8 @@ crate-type = ["rlib", "cdylib", "staticlib"]
 
 [features]
 default = []
+local-whisper-cuda = ["whisper-rs/cuda"]
+local-whisper-rocm = ["whisper-rs/hipblas"]
 local-whisper-vulkan = ["whisper-rs/vulkan"]
 
 [[bin]]
