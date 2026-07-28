@@ -234,6 +234,9 @@ jobs:
           if (-not $cuda) { throw 'The CUDA Toolkit installation was not found.' }
           & "$($cuda.FullName)\bin\nvcc.exe" -V
           "CUDA_PATH=$($cuda.FullName)" >> $env:GITHUB_ENV
+          "CudaToolkitDir=$($cuda.FullName)\" >> $env:GITHUB_ENV
+          "CUDAToolkit_ROOT=$($cuda.FullName)" >> $env:GITHUB_ENV
+          "CUDACXX=$($cuda.FullName)\bin\nvcc.exe" >> $env:GITHUB_ENV
           "$($cuda.FullName)\bin" >> $env:GITHUB_PATH
           "LIBCLANG_PATH=C:\Program Files\LLVM\bin" >> $env:GITHUB_ENV
       - name: Use a short Windows build path for CUDA
