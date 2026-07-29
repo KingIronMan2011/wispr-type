@@ -1,4 +1,5 @@
 name: Release Veskri
+run-name: Release ${{ inputs.release_tag || github.ref_name }} · ${{ github.actor }}
 
 on:
   push:
@@ -11,7 +12,10 @@ on:
         type: string
 
 permissions:
+  artifact-metadata: write
+  attestations: write
   contents: write
+  id-token: write
 
 concurrency:
   group: release-${{ inputs.release_tag || github.ref_name }}
@@ -37,25 +41,98 @@ jobs:
             --generate-notes \
             --draft
 
+  release-sbom:
+    needs: prepare-release
+    name: Release SBOM
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.release_tag || github.ref }}
+      - name: Generate the SPDX software bill of materials
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: spdx-json
+          output-file: veskri.sbom.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+      - name: Upload SBOM to the draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
+        run: |
+          gh release upload "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --clobber \
+            veskri.sbom.spdx.json
+
   release:
     needs: prepare-release
+    name: Release (${{ matrix.name }})
     strategy:
       fail-fast: false
-      max-parallel: 4
+      max-parallel: 9
       matrix:
         include:
-          - runner: windows-latest
+          - name: Windows / Vulkan
+            kind: standard
+            runner: windows-latest
             cache_key: windows-x64
             build_script: build:ci:windows
-          - runner: ubuntu-latest
+            bundle_root: D:\veskri-target
+          - name: Linux / Vulkan
+            kind: standard
+            runner: ubuntu-latest
             cache_key: linux-x64
             build_script: build:ci:linux
-          - runner: macos-26-intel
+          - name: macOS Intel / Metal
+            kind: standard
+            runner: macos-26-intel
             cache_key: macos-intel-metal-v3
             build_script: build:ci:mac
-          - runner: macos-26
+          - name: macOS Apple Silicon / Metal
+            kind: standard
+            runner: macos-26
             cache_key: macos-arm64-metal-v3
             build_script: build:ci:mac
+          - name: CUDA / Windows
+            kind: gpu
+            runner: windows-latest
+            target: windows
+            backend: cuda
+            cache_key: windows-cuda-x64
+            build_script: build:ci:windows-cuda
+            bundle_root: D:\veskri-cuda-target
+          - name: CUDA / Linux
+            kind: gpu
+            runner: ubuntu-latest
+            target: linux
+            backend: cuda
+            cache_key: linux-cuda-x64
+            build_script: build:ci:linux-cuda
+          - name: ROCm / Linux
+            kind: gpu
+            runner: ubuntu-latest
+            target: linux
+            backend: rocm
+            cache_key: linux-rocm-x64
+            build_script: build:ci:linux-rocm
+          - name: Intel SYCL / Windows
+            kind: gpu
+            runner: windows-latest
+            target: windows
+            backend: intel-sycl
+            cache_key: windows-intel-sycl-x64
+            build_script: build:ci:windows-intel
+            bundle_root: D:\veskri-intel-sycl-target
+          - name: Intel SYCL / Linux
+            kind: gpu
+            runner: ubuntu-latest
+            target: linux
+            backend: intel-sycl
+            cache_key: linux-intel-sycl-x64
+            build_script: build:ci:linux-intel
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v7
@@ -68,7 +145,7 @@ jobs:
           cache: pnpm
       - uses: dtolnay/rust-toolchain@stable
       - name: Install Linux system dependencies
-        if: runner.os == 'Linux'
+        if: matrix.kind == 'standard' && runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -87,7 +164,7 @@ jobs:
             rpm \
             glslc
       - name: Install Vulkan SDK for Windows local Whisper acceleration
-        if: runner.os == 'Windows'
+        if: matrix.kind == 'standard' && runner.os == 'Windows'
         run: |
           winget install --id KhronosGroup.VulkanSDK --exact --silent --accept-package-agreements --accept-source-agreements --source winget
           winget install --id LLVM.LLVM --exact --silent --accept-package-agreements --accept-source-agreements --source winget
@@ -97,14 +174,14 @@ jobs:
           echo "$($vulkanSdk.FullName)\Bin" >> "$env:GITHUB_PATH"
           echo "LIBCLANG_PATH=C:\\Program Files\\LLVM\\bin" >> "$env:GITHUB_ENV"
       - name: Use a short Windows build path for Vulkan shader generation
-        if: runner.os == 'Windows'
+        if: matrix.kind == 'standard' && runner.os == 'Windows'
         shell: pwsh
         run: |
           # whisper.cpp creates deeply nested shader-generator projects. Keep the
           # Cargo target path short so MSBuild's FileTracker stays below MAX_PATH.
           'CARGO_TARGET_DIR=D:\\veskri-target' >> $env:GITHUB_ENV
       - name: Configure Windows C/C++ headers for Local Whisper bindgen
-        if: runner.os == 'Windows'
+        if: matrix.kind == 'standard' && runner.os == 'Windows'
         shell: pwsh
         run: |
           $clang = 'C:\Program Files\LLVM\bin\clang.exe'
@@ -123,7 +200,7 @@ jobs:
           ) -join ' '
           "BINDGEN_EXTRA_CLANG_ARGS_x86_64_pc_windows_msvc=$includes" >> $env:GITHUB_ENV
       - name: Install macOS local Whisper build dependencies
-        if: runner.os == 'macOS'
+        if: matrix.kind == 'standard' && runner.os == 'macOS'
         run: |
           brew install llvm
           echo "LIBCLANG_PATH=$(brew --prefix llvm)/lib" >> "$GITHUB_ENV"
@@ -140,6 +217,7 @@ jobs:
       - name: Verify release metadata
         run: pnpm metadata:check
       - name: Verify updater signing secret
+        if: matrix.kind == 'standard'
         shell: pwsh
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -147,7 +225,8 @@ jobs:
           if ([string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY)) {
             throw 'Missing required TAURI_SIGNING_PRIVATE_KEY repository secret.'
           }
-      - uses: tauri-apps/tauri-action@v1
+      - if: matrix.kind == 'standard'
+        uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -156,14 +235,14 @@ jobs:
         with:
           tagName: ${{ inputs.release_tag || github.ref_name }}
           releaseName: "Veskri ${{ inputs.release_tag || github.ref_name }}"
-          releaseBody: "Windows and Linux Vulkan installers, plus unsigned macOS Metal builds for Apple Silicon and Intel. Native CUDA and ROCm assets are separately named manual-update variants. All in-app updater packages are signed."
+          releaseBody: "Windows and Linux Vulkan installers, plus unsigned macOS Metal builds for Apple Silicon and Intel. Native CUDA, ROCm, and Intel SYCL assets are separately named manual-update variants. All in-app updater packages are signed."
           releaseDraft: true
           prerelease: false
           generateReleaseNotes: false
           updaterJsonPreferNsis: true
           tauriScript: "pnpm exec tsx scripts/run-tauri-ci-build.ts"
       - name: Import Linux release signing key
-        if: runner.os == 'Linux'
+        if: matrix.kind == 'standard' && runner.os == 'Linux'
         env:
           LINUX_GPG_PRIVATE_KEY: ${{ secrets.LINUX_GPG_PRIVATE_KEY }}
           LINUX_GPG_FINGERPRINT: BE00817976242ADAF028F67A39593B9B2D74D60A
@@ -178,7 +257,7 @@ jobs:
           gpg --batch --list-secret-keys --with-colons "$LINUX_GPG_FINGERPRINT" | grep -q '^sec:'
           echo "GNUPGHOME=$GNUPGHOME" >> "$GITHUB_ENV"
       - name: Sign and upload Linux release artifacts
-        if: runner.os == 'Linux'
+        if: matrix.kind == 'standard' && runner.os == 'Linux'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           LINUX_GPG_PASSPHRASE: ${{ secrets.LINUX_GPG_PASSPHRASE }}
@@ -202,30 +281,8 @@ jobs:
           signatures=("${artifacts[@]/%/.asc}")
           gh release upload "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --clobber "${signatures[@]}"
 
-  release-cuda:
-    needs: prepare-release
-    strategy:
-      fail-fast: false
-      max-parallel: 2
-      matrix:
-        include:
-          - runner: windows-latest
-            cache_key: windows-cuda-x64
-          - runner: ubuntu-latest
-            cache_key: linux-cuda-x64
-    runs-on: ${{ matrix.runner }}
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ inputs.release_tag || github.ref }}
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          cache: pnpm
-      - uses: dtolnay/rust-toolchain@stable
       - name: Install CUDA and Windows Local Whisper build dependencies
-        if: runner.os == 'Windows'
+        if: matrix.backend == 'cuda' && matrix.target == 'windows'
         shell: pwsh
         run: |
           winget install --id Nvidia.CUDA --exact --silent --accept-package-agreements --accept-source-agreements --source winget
@@ -240,11 +297,11 @@ jobs:
           "$($cuda.FullName)\bin" >> $env:GITHUB_PATH
           "LIBCLANG_PATH=C:\Program Files\LLVM\bin" >> $env:GITHUB_ENV
       - name: Use a short Windows build path for CUDA
-        if: runner.os == 'Windows'
+        if: matrix.backend == 'cuda' && matrix.target == 'windows'
         shell: pwsh
         run: "'CARGO_TARGET_DIR=D:\\veskri-cuda-target' >> $env:GITHUB_ENV"
       - name: Configure Windows C/C++ headers for Local Whisper bindgen
-        if: runner.os == 'Windows'
+        if: matrix.backend == 'cuda' && matrix.target == 'windows'
         shell: pwsh
         run: |
           $clang = 'C:\Program Files\LLVM\bin\clang.exe'
@@ -263,7 +320,7 @@ jobs:
           ) -join ' '
           "BINDGEN_EXTRA_CLANG_ARGS_x86_64_pc_windows_msvc=$includes" >> $env:GITHUB_ENV
       - name: Install CUDA and Linux Local Whisper build dependencies
-        if: runner.os == 'Linux'
+        if: matrix.backend == 'cuda' && matrix.target == 'linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -283,15 +340,8 @@ jobs:
           nvcc -V
           cuda_root="$(dirname "$(dirname "$(readlink -f "$(command -v nvcc)")")")"
           echo "CUDA_PATH=$cuda_root" >> "$GITHUB_ENV"
-      - name: Cache Rust build
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "src-tauri -> target"
-          key: ${{ matrix.cache_key }}
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm metadata:check
       - name: Verify updater signing secret
-        if: runner.os == 'Windows'
+        if: matrix.backend == 'cuda' && matrix.target == 'windows'
         shell: pwsh
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -300,13 +350,13 @@ jobs:
             throw 'Missing required TAURI_SIGNING_PRIVATE_KEY repository secret.'
           }
       - name: Build the NVIDIA CUDA installer
-        if: runner.os == 'Windows'
+        if: matrix.backend == 'cuda' && matrix.target == 'windows'
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
         run: pnpm run build:ci:windows-cuda
       - name: Upload the CUDA installer as a manual-update release asset
-        if: runner.os == 'Windows'
+        if: matrix.backend == 'cuda' && matrix.target == 'windows'
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -325,7 +375,7 @@ jobs:
           if (Test-Path -LiteralPath $cudaSignature) { $assets += $cudaSignature }
           gh release upload "$env:RELEASE_TAG" --repo "$env:GITHUB_REPOSITORY" --clobber $assets
       - name: Verify updater signing secret
-        if: runner.os == 'Linux'
+        if: matrix.backend == 'cuda' && matrix.target == 'linux'
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         run: |
@@ -334,13 +384,13 @@ jobs:
             exit 1
           }
       - name: Build the NVIDIA CUDA Linux packages
-        if: runner.os == 'Linux'
+        if: matrix.backend == 'cuda' && matrix.target == 'linux'
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
         run: pnpm run build:ci:linux-cuda
       - name: Import Linux release signing key
-        if: runner.os == 'Linux'
+        if: matrix.backend == 'cuda' && matrix.target == 'linux'
         env:
           LINUX_GPG_PRIVATE_KEY: ${{ secrets.LINUX_GPG_PRIVATE_KEY }}
           LINUX_GPG_FINGERPRINT: BE00817976242ADAF028F67A39593B9B2D74D60A
@@ -355,7 +405,7 @@ jobs:
           gpg --batch --list-secret-keys --with-colons "$LINUX_GPG_FINGERPRINT" | grep -q '^sec:'
           echo "GNUPGHOME=$GNUPGHOME" >> "$GITHUB_ENV"
       - name: Sign and upload CUDA Linux release artifacts
-        if: runner.os == 'Linux'
+        if: matrix.backend == 'cuda' && matrix.target == 'linux'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           LINUX_GPG_PASSPHRASE: ${{ secrets.LINUX_GPG_PASSPHRASE }}
@@ -382,20 +432,8 @@ jobs:
           done
           gh release upload "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --clobber "${uploads[@]}"
 
-  release-rocm:
-    needs: prepare-release
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ inputs.release_tag || github.ref }}
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          cache: pnpm
-      - uses: dtolnay/rust-toolchain@stable
       - name: Install Linux and ROCm Local Whisper build dependencies
+        if: matrix.backend == 'rocm'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -419,14 +457,8 @@ jobs:
           /opt/rocm/bin/hipconfig --full
           echo "HIP_PATH=/opt/rocm" >> "$GITHUB_ENV"
           echo "/opt/rocm/bin" >> "$GITHUB_PATH"
-      - name: Cache Rust build
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "src-tauri -> target"
-          key: linux-rocm-x64
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm metadata:check
       - name: Verify updater signing secret
+        if: matrix.backend == 'rocm'
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         run: |
@@ -435,11 +467,13 @@ jobs:
             exit 1
           }
       - name: Build the AMD ROCm installers
+        if: matrix.backend == 'rocm'
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
         run: pnpm run build:ci:linux-rocm
       - name: Import Linux release signing key
+        if: matrix.backend == 'rocm'
         env:
           LINUX_GPG_PRIVATE_KEY: ${{ secrets.LINUX_GPG_PRIVATE_KEY }}
           LINUX_GPG_FINGERPRINT: BE00817976242ADAF028F67A39593B9B2D74D60A
@@ -454,6 +488,7 @@ jobs:
           gpg --batch --list-secret-keys --with-colons "$LINUX_GPG_FINGERPRINT" | grep -q '^sec:'
           echo "GNUPGHOME=$GNUPGHOME" >> "$GITHUB_ENV"
       - name: Sign and upload ROCm release artifacts
+        if: matrix.backend == 'rocm'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           LINUX_GPG_PASSPHRASE: ${{ secrets.LINUX_GPG_PASSPHRASE }}
@@ -480,32 +515,8 @@ jobs:
           done
           gh release upload "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --clobber "${uploads[@]}"
 
-  release-intel-sycl:
-    needs: prepare-release
-    strategy:
-      fail-fast: false
-      max-parallel: 2
-      matrix:
-        include:
-          - runner: windows-latest
-            target: windows
-            cache_key: windows-intel-sycl-x64
-          - runner: ubuntu-latest
-            target: linux
-            cache_key: linux-intel-sycl-x64
-    runs-on: ${{ matrix.runner }}
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ inputs.release_tag || github.ref }}
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          cache: pnpm
-      - uses: dtolnay/rust-toolchain@stable
       - name: Install Windows Intel oneAPI build dependencies
-        if: matrix.target == 'windows'
+        if: matrix.backend == 'intel-sycl' && matrix.target == 'windows'
         shell: pwsh
         run: |
           winget install --id Intel.OneAPI.Toolkit --exact --silent --accept-package-agreements --accept-source-agreements --source winget
@@ -516,7 +527,7 @@ jobs:
           "ONEAPI_SETVARS=$setvars" >> $env:GITHUB_ENV
           "LIBCLANG_PATH=C:\Program Files\LLVM\bin" >> $env:GITHUB_ENV
       - name: Configure Windows C/C++ headers for Local Whisper bindgen
-        if: matrix.target == 'windows'
+        if: matrix.backend == 'intel-sycl' && matrix.target == 'windows'
         shell: pwsh
         run: |
           $clang = 'C:\Program Files\LLVM\bin\clang.exe'
@@ -535,7 +546,7 @@ jobs:
           ) -join ' '
           "BINDGEN_EXTRA_CLANG_ARGS_x86_64_pc_windows_msvc=$includes" >> $env:GITHUB_ENV
       - name: Install Linux Intel oneAPI build dependencies
-        if: matrix.target == 'linux'
+        if: matrix.backend == 'intel-sycl' && matrix.target == 'linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -561,15 +572,8 @@ jobs:
             intel-oneapi-compiler-dpcpp-cpp-and-cpp-classic \
             intel-oneapi-dnnl-devel \
             intel-oneapi-mkl-devel
-      - name: Cache Rust build
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "src-tauri -> target"
-          key: ${{ matrix.cache_key }}
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm metadata:check
       - name: Verify updater signing secret
-        if: matrix.target == 'windows'
+        if: matrix.backend == 'intel-sycl' && matrix.target == 'windows'
         shell: pwsh
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -578,7 +582,7 @@ jobs:
             throw 'Missing required TAURI_SIGNING_PRIVATE_KEY repository secret.'
           }
       - name: Build the Intel SYCL Windows installer
-        if: matrix.target == 'windows'
+        if: matrix.backend == 'intel-sycl' && matrix.target == 'windows'
         shell: pwsh
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -593,7 +597,7 @@ jobs:
           $env:CARGO_TARGET_DIR = 'D:\veskri-intel-sycl-target'
           pnpm run build:ci:windows-intel
       - name: Upload the Intel SYCL Windows installer as a manual-update release asset
-        if: matrix.target == 'windows'
+        if: matrix.backend == 'intel-sycl' && matrix.target == 'windows'
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -612,7 +616,7 @@ jobs:
           if (Test-Path -LiteralPath $intelSignature) { $assets += $intelSignature }
           gh release upload "$env:RELEASE_TAG" --repo "$env:GITHUB_REPOSITORY" --clobber $assets
       - name: Verify updater signing secret
-        if: matrix.target == 'linux'
+        if: matrix.backend == 'intel-sycl' && matrix.target == 'linux'
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         run: |
@@ -621,7 +625,7 @@ jobs:
             exit 1
           }
       - name: Build the Intel SYCL Linux packages
-        if: matrix.target == 'linux'
+        if: matrix.backend == 'intel-sycl' && matrix.target == 'linux'
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
@@ -629,7 +633,7 @@ jobs:
           source /opt/intel/oneapi/setvars.sh --force > /dev/null
           pnpm run build:ci:linux-intel
       - name: Import Linux release signing key
-        if: matrix.target == 'linux'
+        if: matrix.backend == 'intel-sycl' && matrix.target == 'linux'
         env:
           LINUX_GPG_PRIVATE_KEY: ${{ secrets.LINUX_GPG_PRIVATE_KEY }}
           LINUX_GPG_FINGERPRINT: BE00817976242ADAF028F67A39593B9B2D74D60A
@@ -644,7 +648,7 @@ jobs:
           gpg --batch --list-secret-keys --with-colons "$LINUX_GPG_FINGERPRINT" | grep -q '^sec:'
           echo "GNUPGHOME=$GNUPGHOME" >> "$GITHUB_ENV"
       - name: Sign and upload Intel SYCL Linux release artifacts
-        if: matrix.target == 'linux'
+        if: matrix.backend == 'intel-sycl' && matrix.target == 'linux'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           LINUX_GPG_PASSPHRASE: ${{ secrets.LINUX_GPG_PASSPHRASE }}
@@ -671,8 +675,58 @@ jobs:
           done
           gh release upload "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --clobber "${uploads[@]}"
 
+      - name: Collect Windows release artifacts for provenance
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          BUNDLE_ROOT: ${{ matrix.bundle_root }}
+          MATRIX_BACKEND: ${{ matrix.backend }}
+          MATRIX_KIND: ${{ matrix.kind }}
+        run: |
+          $source = Join-Path $env:BUNDLE_ROOT 'release\bundle'
+          $destination = Join-Path $env:GITHUB_WORKSPACE 'release-subjects'
+          New-Item -ItemType Directory -Force -Path $destination | Out-Null
+          if ($env:MATRIX_KIND -eq 'gpu') {
+            $artifacts = @(Get-ChildItem $source -Recurse -File -Filter "*-$env:MATRIX_BACKEND-setup.exe")
+          } else {
+            $artifacts = @(Get-ChildItem $source -Recurse -File | Where-Object {
+              $_.Extension -in @('.exe', '.msi')
+            })
+          }
+          if ($artifacts.Count -eq 0) { throw 'No Windows release artifacts were found for provenance.' }
+          $artifacts | ForEach-Object {
+            Copy-Item -LiteralPath $_.FullName -Destination $destination
+          }
+      - name: Collect Linux and macOS release artifacts for provenance
+        if: runner.os != 'Windows'
+        env:
+          MATRIX_BACKEND: ${{ matrix.backend }}
+          MATRIX_KIND: ${{ matrix.kind }}
+        run: |
+          mkdir -p release-subjects
+          if [ "$MATRIX_KIND" = "gpu" ]; then
+            find src-tauri/target/release/bundle -type f \
+              -name "*-$MATRIX_BACKEND.*" \
+              ! -name '*.asc' \
+              ! -name '*.sig' \
+              -exec cp {} release-subjects/ \;
+          else
+            find src-tauri/target/release/bundle -type f \
+              ! -name '*.asc' \
+              ! -name '*.sig' \
+              -exec cp {} release-subjects/ \;
+          fi
+          test "$(find release-subjects -maxdepth 1 -type f | wc -l)" -gt 0 || {
+            echo "No release artifacts were found for provenance."
+            exit 1
+          }
+      - name: Generate build provenance attestation
+        uses: actions/attest@v4
+        with:
+          subject-path: release-subjects/**
+
   publish-release:
-    needs: [release, release-cuda, release-rocm, release-intel-sycl]
+    needs: [release, release-sbom]
     runs-on: ubuntu-latest
     steps:
       - name: Publish the completed release

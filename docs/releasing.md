@@ -26,6 +26,15 @@ The workflow creates one draft release first, then runs the platform builds in
 parallel and uploads their artifacts to that draft. It publishes the release
 only after every required build has completed.
 
+Every release also includes `veskri.sbom.spdx.json`, an SPDX software bill of
+materials for the tagged source tree. GitHub Actions creates a signed
+provenance attestation for every released installer and package. Verify an
+artifact after downloading it with:
+
+```bash
+gh attestation verify <artifact-file> --repo veskri/veskri
+```
+
 Before pushing the tag, run:
 
 ```powershell
