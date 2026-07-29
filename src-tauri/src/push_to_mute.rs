@@ -66,7 +66,11 @@ pub(crate) fn test_keybind() -> Result<(), String> {
 }
 
 fn send_discord_keybind(direction: Direction) -> Result<(), String> {
-    let mut enigo = Enigo::new(&EnigoSettings::default())
+    let enigo_settings = EnigoSettings {
+        release_keys_when_dropped: false,
+        ..EnigoSettings::default()
+    };
+    let mut enigo = Enigo::new(&enigo_settings)
         .map_err(|error| format!("Couldn’t prepare Discord push-to-mute: {error}"))?;
     let keys = match direction {
         Direction::Press => DISCORD_PUSH_TO_MUTE_KEYS.as_slice(),

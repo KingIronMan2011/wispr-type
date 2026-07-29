@@ -11,6 +11,7 @@ blob-report/
 
 # Tauri / Rust build output
 src-tauri/target/
+.cargo-target-discord-check/
 
 # Release signing material (never commit the private updater key)
 veskri-updater.key
