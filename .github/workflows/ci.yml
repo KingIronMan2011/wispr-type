@@ -52,7 +52,94 @@ jobs:
       - run: pnpm lint
       - run: pnpm test
       - run: pnpm test:rust
-      - name: Compile the optional Vulkan Local Whisper backend
-        run: cargo check --manifest-path src-tauri/Cargo.toml --features local-whisper-vulkan
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm test:e2e
+
+  local-whisper-backends:
+    name: Local Whisper (${{ matrix.name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Vulkan
+            runner: ubuntu-latest
+            feature: local-whisper-vulkan
+            cache_key: ubuntu-vulkan
+          - name: CUDA
+            runner: windows-latest
+            feature: local-whisper-cuda
+            cache_key: windows-cuda
+          - name: Metal
+            runner: macos-26
+            feature: local-whisper-metal
+            cache_key: macos-metal
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install Linux Vulkan build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            file \
+            libasound2-dev \
+            libappindicator3-dev \
+            libclang-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libvulkan-dev \
+            libwebkit2gtk-4.1-dev \
+            libxdo-dev \
+            patchelf \
+            rpm \
+            glslc
+      - name: Install Windows CUDA build dependencies
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          winget install --id Nvidia.CUDA --exact --silent --accept-package-agreements --accept-source-agreements --source winget
+          winget install --id LLVM.LLVM --exact --silent --accept-package-agreements --accept-source-agreements --source winget
+          $cuda = Get-ChildItem 'C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA' -Directory | Sort-Object Name -Descending | Select-Object -First 1
+          if (-not $cuda) { throw 'The CUDA Toolkit installation was not found.' }
+          & "$($cuda.FullName)\bin\nvcc.exe" -V
+          "CUDA_PATH=$($cuda.FullName)" >> $env:GITHUB_ENV
+          "CudaToolkitDir=$($cuda.FullName)\" >> $env:GITHUB_ENV
+          "CUDAToolkit_ROOT=$($cuda.FullName)" >> $env:GITHUB_ENV
+          "CUDACXX=$($cuda.FullName)\bin\nvcc.exe" >> $env:GITHUB_ENV
+          "$($cuda.FullName)\bin" >> $env:GITHUB_PATH
+          "LIBCLANG_PATH=C:\Program Files\LLVM\bin" >> $env:GITHUB_ENV
+          'CARGO_TARGET_DIR=D:\veskri-ci-cuda-target' >> $env:GITHUB_ENV
+      - name: Configure Windows C/C++ headers for Local Whisper bindgen
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $clang = 'C:\Program Files\LLVM\bin\clang.exe'
+          $resource = & $clang -print-resource-dir
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vs = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          $msvc = Get-ChildItem "$vs\VC\Tools\MSVC" -Directory | Sort-Object Name -Descending | Select-Object -First 1
+          $sdk = Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\Include' -Directory | Sort-Object Name -Descending | Select-Object -First 1
+          if (-not $resource -or -not $msvc -or -not $sdk) { throw 'Required Windows C/C++ headers were not found.' }
+          $includes = @(
+            "-isystem$resource\include",
+            "-isystem$($msvc.FullName)\include",
+            "-isystem$($sdk.FullName)\ucrt",
+            "-isystem$($sdk.FullName)\shared",
+            "-isystem$($sdk.FullName)\um"
+          ) -join ' '
+          "BINDGEN_EXTRA_CLANG_ARGS_x86_64_pc_windows_msvc=$includes" >> $env:GITHUB_ENV
+      - name: Install macOS Metal build dependencies
+        if: runner.os == 'macOS'
+        run: |
+          brew install llvm
+          echo "LIBCLANG_PATH=$(brew --prefix llvm)/lib" >> "$GITHUB_ENV"
+          echo "MACOSX_DEPLOYMENT_TARGET=26.0" >> "$GITHUB_ENV"
+          echo "CMAKE_OSX_DEPLOYMENT_TARGET=26.0" >> "$GITHUB_ENV"
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "src-tauri -> target"
+          key: ${{ matrix.cache_key }}
+      - name: Compile the optional Local Whisper backend
+        run: cargo check --manifest-path src-tauri/Cargo.toml --features ${{ matrix.feature }}
