@@ -475,10 +475,10 @@ jobs:
               $env:CPLUS_INCLUDE_PATH = $syclcompatInclude
             }
             $toolchain = Join-Path $env:RUNNER_TEMP 'veskri-intel-sycl-toolchain.cmake'
-            @'
-            set(CMAKE_C_COMPILER "icx" CACHE FILEPATH "" FORCE)
-            set(CMAKE_CXX_COMPILER "icx" CACHE FILEPATH "" FORCE)
-            '@ | Set-Content -LiteralPath $toolchain -NoNewline
+            @(
+              'set(CMAKE_C_COMPILER "icx" CACHE FILEPATH "" FORCE)',
+              'set(CMAKE_CXX_COMPILER "icx" CACHE FILEPATH "" FORCE)'
+            ) | Set-Content -LiteralPath $toolchain
             $env:CMAKE_TOOLCHAIN_FILE = $toolchain
             $env:CMAKE_C_FLAGS = ''
             $env:CMAKE_CXX_FLAGS = '/EHsc'
@@ -515,6 +515,7 @@ jobs:
             }
             TBB_DIR="$(dirname "$tbb_config")"
             export TBB_DIR
+            unset LD_LIBRARY_PATH
           fi
           pnpm run "$BUILD_SCRIPT"
       - name: Upload the CUDA installer as a manual-update release asset
@@ -772,7 +773,7 @@ jobs:
       - name: Generate build provenance attestation
         uses: actions/attest@v4
         with:
-          subject-path: release-subjects/**
+          subject-path: release-subjects/*
 
   publish-release:
     needs: [release, release-sbom]
