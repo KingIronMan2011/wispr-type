@@ -425,6 +425,7 @@ jobs:
             libclang-dev \
             librsvg2-dev \
             libssl-dev \
+            libtbb-dev \
             libwebkit2gtk-4.1-dev \
             libxdo-dev \
             patchelf \
@@ -463,6 +464,7 @@ jobs:
             Get-Command icx.exe -ErrorAction Stop | Out-Null
             Get-Command icpx.exe -ErrorAction Stop | Out-Null
             Get-Command ninja.exe -ErrorAction Stop | Out-Null
+            $env:CMAKE_CXX_COMPILER = 'icx'
             $env:CMAKE_C_FLAGS = ''
             $env:CMAKE_CXX_FLAGS = ''
             $env:CMAKE_ASM_FLAGS = ''

@@ -206,6 +206,7 @@ jobs:
           Get-Command icpx.exe -ErrorAction Stop | Out-Null
           Get-Command ninja.exe -ErrorAction Stop | Out-Null
           'CMAKE_GENERATOR=Ninja' >> $env:GITHUB_ENV
+          'CMAKE_CXX_COMPILER=icx' >> $env:GITHUB_ENV
           'CMAKE_C_FLAGS=' >> $env:GITHUB_ENV
           'CMAKE_CXX_FLAGS=' >> $env:GITHUB_ENV
           'CMAKE_ASM_FLAGS=' >> $env:GITHUB_ENV
@@ -242,6 +243,7 @@ jobs:
             libclang-dev \
             librsvg2-dev \
             libssl-dev \
+            libtbb-dev \
             libwebkit2gtk-4.1-dev \
             libxdo-dev \
             patchelf \
