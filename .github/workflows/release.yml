@@ -436,6 +436,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             intel-oneapi-compiler-dpcpp-cpp-and-cpp-classic \
+            intel-oneapi-dpcpp-ct \
             intel-oneapi-dnnl-devel \
             intel-oneapi-mkl-devel
       - name: Build the Windows GPU installer
@@ -457,6 +458,10 @@ jobs:
                 [Environment]::SetEnvironmentVariable($Matches[1], $Matches[2], 'Process')
               }
             }
+            $env:CMAKE_GENERATOR = 'Ninja'
+            $env:CC = (Get-Command icx.exe -ErrorAction Stop).Source
+            $env:CXX = (Get-Command icpx.exe -ErrorAction Stop).Source
+            Get-Command ninja.exe -ErrorAction Stop | Out-Null
             $env:CARGO_TARGET_DIR = 'D:\veskri-intel-sycl-target'
           }
           pnpm run $env:BUILD_SCRIPT
@@ -474,6 +479,13 @@ jobs:
           }
           if [ "$GPU_BACKEND" = "intel-sycl" ]; then
             source /opt/intel/oneapi/setvars.sh --force > /dev/null
+            syclcompat_header="$(find /opt/intel/oneapi -path '*/include/syclcompat/math.hpp' -print -quit)"
+            test -n "$syclcompat_header" || {
+              echo "The Intel oneAPI SYCLcompat headers were not found."
+              exit 1
+            }
+            syclcompat_include="$(dirname "$(dirname "$syclcompat_header")")"
+            export CPLUS_INCLUDE_PATH="$syclcompat_include${CPLUS_INCLUDE_PATH:+:$CPLUS_INCLUDE_PATH}"
           fi
           pnpm run "$BUILD_SCRIPT"
       - name: Upload the CUDA installer as a manual-update release asset

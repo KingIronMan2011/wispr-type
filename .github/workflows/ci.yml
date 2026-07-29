@@ -75,16 +75,26 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: Vulkan
+          - name: Vulkan (Linux)
             runner: ubuntu-latest
             feature: local-whisper-vulkan
             cache_key: ubuntu-vulkan
-            backend: vulkan
-          - name: CUDA
+            backend: vulkan-linux
+          - name: Vulkan (Windows)
+            runner: windows-latest
+            feature: local-whisper-vulkan
+            cache_key: windows-vulkan
+            backend: vulkan-windows
+          - name: CUDA (Windows)
             runner: windows-latest
             feature: local-whisper-cuda
             cache_key: windows-cuda
-            backend: cuda
+            backend: cuda-windows
+          - name: CUDA (Linux)
+            runner: ubuntu-latest
+            feature: local-whisper-cuda
+            cache_key: linux-cuda
+            backend: cuda-linux
           - name: Metal
             runner: macos-26
             feature: local-whisper-metal
@@ -105,7 +115,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - name: Install Linux Vulkan build dependencies
-        if: matrix.backend == 'vulkan'
+        if: matrix.backend == 'vulkan-linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -122,8 +132,20 @@ jobs:
             patchelf \
             rpm \
             glslc
+      - name: Install Windows Vulkan build dependencies
+        if: matrix.backend == 'vulkan-windows'
+        shell: pwsh
+        run: |
+          winget install --id KhronosGroup.VulkanSDK --exact --silent --accept-package-agreements --accept-source-agreements --source winget
+          winget install --id LLVM.LLVM --exact --silent --accept-package-agreements --accept-source-agreements --source winget
+          $vulkanSdk = Get-ChildItem 'C:\VulkanSDK' -Directory | Sort-Object Name -Descending | Select-Object -First 1
+          if (-not $vulkanSdk) { throw 'The Vulkan SDK installation was not found.' }
+          "VULKAN_SDK=$($vulkanSdk.FullName)" >> $env:GITHUB_ENV
+          "$($vulkanSdk.FullName)\Bin" >> $env:GITHUB_PATH
+          "LIBCLANG_PATH=C:\Program Files\LLVM\bin" >> $env:GITHUB_ENV
+          'CARGO_TARGET_DIR=D:\veskri-ci-vulkan-target' >> $env:GITHUB_ENV
       - name: Install Windows CUDA build dependencies
-        if: matrix.backend == 'cuda'
+        if: matrix.backend == 'cuda-windows'
         shell: pwsh
         run: |
           winget install --id Nvidia.CUDA --exact --silent --accept-package-agreements --accept-source-agreements --source winget
@@ -138,6 +160,26 @@ jobs:
           "$($cuda.FullName)\bin" >> $env:GITHUB_PATH
           "LIBCLANG_PATH=C:\Program Files\LLVM\bin" >> $env:GITHUB_ENV
           'CARGO_TARGET_DIR=D:\veskri-ci-cuda-target' >> $env:GITHUB_ENV
+      - name: Install Linux CUDA build dependencies
+        if: matrix.backend == 'cuda-linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            file \
+            libasound2-dev \
+            libappindicator3-dev \
+            libclang-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libwebkit2gtk-4.1-dev \
+            libxdo-dev \
+            nvidia-cuda-toolkit \
+            patchelf \
+            rpm
+          nvcc -V
+          cuda_root="$(dirname "$(dirname "$(readlink -f "$(command -v nvcc)")")")"
+          echo "CUDA_PATH=$cuda_root" >> "$GITHUB_ENV"
       - name: Install Windows Intel oneAPI build dependencies
         if: matrix.backend == 'intel-sycl-windows'
         shell: pwsh
@@ -155,6 +197,12 @@ jobs:
               $entry | Add-Content -Path $env:GITHUB_ENV
             }
           }
+          $icx = (Get-Command icx.exe -ErrorAction Stop).Source
+          $icpx = (Get-Command icpx.exe -ErrorAction Stop).Source
+          Get-Command ninja.exe -ErrorAction Stop | Out-Null
+          'CMAKE_GENERATOR=Ninja' >> $env:GITHUB_ENV
+          "CC=$icx" >> $env:GITHUB_ENV
+          "CXX=$icpx" >> $env:GITHUB_ENV
           'CARGO_TARGET_DIR=D:\veskri-ci-intel-target' >> $env:GITHUB_ENV
       - name: Configure Windows C/C++ headers for Local Whisper bindgen
         if: runner.os == 'Windows'
@@ -200,11 +248,19 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             intel-oneapi-compiler-dpcpp-cpp-and-cpp-classic \
+            intel-oneapi-dpcpp-ct \
             intel-oneapi-dnnl-devel \
             intel-oneapi-mkl-devel
           source /opt/intel/oneapi/setvars.sh --force > /dev/null
+          syclcompat_header="$(find /opt/intel/oneapi -path '*/include/syclcompat/math.hpp' -print -quit)"
+          test -n "$syclcompat_header" || {
+            echo "The Intel oneAPI SYCLcompat headers were not found."
+            exit 1
+          }
+          syclcompat_include="$(dirname "$(dirname "$syclcompat_header")")"
+          export CPLUS_INCLUDE_PATH="$syclcompat_include${CPLUS_INCLUDE_PATH:+:$CPLUS_INCLUDE_PATH}"
           {
-            for variable in ONEAPI_ROOT CMPLR_ROOT DPCPP_ROOT MKLROOT DNNLROOT CPATH LIBRARY_PATH LD_LIBRARY_PATH; do
+            for variable in ONEAPI_ROOT CMPLR_ROOT DPCPP_ROOT MKLROOT DNNLROOT CPATH CPLUS_INCLUDE_PATH LIBRARY_PATH LD_LIBRARY_PATH; do
               value="${!variable:-}"
               if [ -n "$value" ]; then
                 echo "$variable=$value"
@@ -216,9 +272,11 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           brew install llvm
-          echo "LIBCLANG_PATH=$(brew --prefix llvm)/lib" >> "$GITHUB_ENV"
-          echo "MACOSX_DEPLOYMENT_TARGET=26.0" >> "$GITHUB_ENV"
-          echo "CMAKE_OSX_DEPLOYMENT_TARGET=26.0" >> "$GITHUB_ENV"
+          {
+            echo "LIBCLANG_PATH=$(brew --prefix llvm)/lib"
+            echo "MACOSX_DEPLOYMENT_TARGET=26.0"
+            echo "CMAKE_OSX_DEPLOYMENT_TARGET=26.0"
+          } >> "$GITHUB_ENV"
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: "src-tauri -> target"
