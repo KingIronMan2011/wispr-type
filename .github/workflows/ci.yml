@@ -29,48 +29,48 @@ jobs:
       - name: Lint GitHub Actions workflows
         run: actionlint -color
 
-  # quality:
-  #   name: Quality checks
-  #   if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v7
-  #     - uses: pnpm/action-setup@v6
-  #     - uses: actions/setup-node@v7
-  #       with:
-  #         node-version: 24
-  #         cache: pnpm
-  #     - uses: dtolnay/rust-toolchain@stable
-  #     - name: Install Linux system dependencies
-  #       run: |
-  #         sudo apt-get update
-  #         sudo apt-get install -y \
-  #           build-essential \
-  #           libclang-dev \
-  #           file \
-  #           libasound2-dev \
-  #           libappindicator3-dev \
-  #           librsvg2-dev \
-  #           libssl-dev \
-  #           libvulkan-dev \
-  #           libwebkit2gtk-4.1-dev \
-  #           libxdo-dev \
-  #           patchelf \
-  #           rpm \
-  #           glslc
-  #     - uses: Swatinem/rust-cache@v2
-  #       with:
-  #         workspaces: "src-tauri -> target"
-  #         key: ubuntu-quality
-  #     - run: pnpm install --frozen-lockfile
-  #     - run: pnpm metadata:check
-  #     - run: pnpm format:check
-  #     - run: pnpm types
-  #     - run: pnpm lint
-  #     - run: pnpm test
-  #     - run: pnpm test:rust
-  #     - run: pnpm exec playwright install --with-deps chromium
-  #     - run: pnpm test:e2e
+  quality:
+    name: Quality checks
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install Linux system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            libclang-dev \
+            file \
+            libasound2-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libvulkan-dev \
+            libwebkit2gtk-4.1-dev \
+            libxdo-dev \
+            patchelf \
+            rpm \
+            glslc
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "src-tauri -> target"
+          key: ubuntu-quality
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm metadata:check
+      - run: pnpm format:check
+      - run: pnpm types
+      - run: pnpm lint
+      - run: pnpm test
+      - run: pnpm test:rust
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:e2e
 
   local-whisper-backends:
     name: Local Whisper (${{ matrix.name }})
@@ -79,31 +79,31 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # - name: Vulkan (Linux)
-          #   runner: ubuntu-latest
-          #   feature: local-whisper-vulkan
-          #   cache_key: ubuntu-vulkan
-          #   backend: vulkan-linux
-          # - name: Vulkan (Windows)
-          #   runner: windows-latest
-          #   feature: local-whisper-vulkan
-          #   cache_key: windows-vulkan
-          #   backend: vulkan-windows
-          # - name: CUDA (Windows)
-          #   runner: windows-latest
-          #   feature: local-whisper-cuda
-          #   cache_key: windows-cuda
-          #   backend: cuda-windows
-          # - name: CUDA (Linux)
-          #   runner: ubuntu-latest
-          #   feature: local-whisper-cuda
-          #   cache_key: linux-cuda
-          #   backend: cuda-linux
-          # - name: Metal
-          #   runner: macos-26
-          #   feature: local-whisper-metal
-          #   cache_key: macos-metal
-          #   backend: metal
+          - name: Vulkan (Linux)
+            runner: ubuntu-latest
+            feature: local-whisper-vulkan
+            cache_key: ubuntu-vulkan
+            backend: vulkan-linux
+          - name: Vulkan (Windows)
+            runner: windows-latest
+            feature: local-whisper-vulkan
+            cache_key: windows-vulkan
+            backend: vulkan-windows
+          - name: CUDA (Windows)
+            runner: windows-latest
+            feature: local-whisper-cuda
+            cache_key: windows-cuda
+            backend: cuda-windows
+          - name: CUDA (Linux)
+            runner: ubuntu-latest
+            feature: local-whisper-cuda
+            cache_key: linux-cuda
+            backend: cuda-linux
+          - name: Metal
+            runner: macos-26
+            feature: local-whisper-metal
+            cache_key: macos-metal
+            backend: metal
           - name: Intel SYCL (Linux)
             runner: ubuntu-latest
             feature: local-whisper-intel-sycl
