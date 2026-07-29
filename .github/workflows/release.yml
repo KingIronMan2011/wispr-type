@@ -384,7 +384,7 @@ jobs:
         if: matrix.backend == 'intel-sycl' && matrix.target == 'windows'
         shell: pwsh
         run: |
-          winget install --id Intel.OneAPI.Toolkit --exact --silent --accept-package-agreements --accept-source-agreements --source winget
+          winget install --id Intel.OneAPI.BaseToolkit --exact --silent --accept-package-agreements --accept-source-agreements --source winget
           winget install --id LLVM.LLVM --exact --silent --accept-package-agreements --accept-source-agreements --source winget
           $oneapi = 'C:\Program Files (x86)\Intel\oneAPI'
           $setvars = Join-Path $oneapi 'setvars.bat'
@@ -464,6 +464,16 @@ jobs:
             Get-Command icx.exe -ErrorAction Stop | Out-Null
             Get-Command icpx.exe -ErrorAction Stop | Out-Null
             Get-Command ninja.exe -ErrorAction Stop | Out-Null
+            $syclcompat = Get-ChildItem -Path $env:ONEAPI_ROOT -Recurse -File -Filter 'math.hpp' |
+              Where-Object { $_.FullName -match '[\\/]include[\\/]syclcompat[\\/]math\.hpp$' } |
+              Select-Object -First 1
+            if (-not $syclcompat) { throw 'The Intel oneAPI SYCLcompat headers were not found.' }
+            $syclcompatInclude = Split-Path (Split-Path $syclcompat.FullName -Parent) -Parent
+            if ($env:CPLUS_INCLUDE_PATH) {
+              $env:CPLUS_INCLUDE_PATH = "$syclcompatInclude;$env:CPLUS_INCLUDE_PATH"
+            } else {
+              $env:CPLUS_INCLUDE_PATH = $syclcompatInclude
+            }
             $toolchain = Join-Path $env:RUNNER_TEMP 'veskri-intel-sycl-toolchain.cmake'
             @'
             set(CMAKE_C_COMPILER "icx" CACHE FILEPATH "" FORCE)
@@ -503,7 +513,8 @@ jobs:
               echo "The Intel oneAPI TBB CMake package was not found."
               exit 1
             }
-            export TBB_DIR="$(dirname "$tbb_config")"
+            TBB_DIR="$(dirname "$tbb_config")"
+            export TBB_DIR
           fi
           pnpm run "$BUILD_SCRIPT"
       - name: Upload the CUDA installer as a manual-update release asset
