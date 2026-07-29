@@ -471,7 +471,7 @@ jobs:
             '@ | Set-Content -LiteralPath $toolchain -NoNewline
             $env:CMAKE_TOOLCHAIN_FILE = $toolchain
             $env:CMAKE_C_FLAGS = ''
-            $env:CMAKE_CXX_FLAGS = ''
+            $env:CMAKE_CXX_FLAGS = '/EHsc'
             $env:CMAKE_ASM_FLAGS = ''
             $env:CARGO_TARGET_DIR = 'D:\veskri-intel-sycl-target'
           }
@@ -497,6 +497,7 @@ jobs:
             }
             syclcompat_include="$(dirname "$(dirname "$syclcompat_header")")"
             export CPLUS_INCLUDE_PATH="$syclcompat_include${CPLUS_INCLUDE_PATH:+:$CPLUS_INCLUDE_PATH}"
+            tbb_config=''
             tbb_config="$(find /opt/intel/oneapi/tbb -type f -name TBBConfig.cmake -print -quit)"
             test -n "$tbb_config" || {
               echo "The Intel oneAPI TBB CMake package was not found."

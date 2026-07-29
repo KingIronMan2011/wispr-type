@@ -213,7 +213,7 @@ jobs:
           'CMAKE_GENERATOR=Ninja' >> $env:GITHUB_ENV
           "CMAKE_TOOLCHAIN_FILE=$toolchain" >> $env:GITHUB_ENV
           'CMAKE_C_FLAGS=' >> $env:GITHUB_ENV
-          'CMAKE_CXX_FLAGS=' >> $env:GITHUB_ENV
+          'CMAKE_CXX_FLAGS=/EHsc' >> $env:GITHUB_ENV
           'CMAKE_ASM_FLAGS=' >> $env:GITHUB_ENV
           'CARGO_TARGET_DIR=D:\veskri-ci-intel-target' >> $env:GITHUB_ENV
       - name: Configure Windows C/C++ headers for Local Whisper bindgen
@@ -272,6 +272,7 @@ jobs:
           }
           syclcompat_include="$(dirname "$(dirname "$syclcompat_header")")"
           export CPLUS_INCLUDE_PATH="$syclcompat_include${CPLUS_INCLUDE_PATH:+:$CPLUS_INCLUDE_PATH}"
+          tbb_config=''
           tbb_config="$(find /opt/intel/oneapi/tbb -type f -name TBBConfig.cmake -print -quit)"
           test -n "$tbb_config" || {
             echo "The Intel oneAPI TBB CMake package was not found."
