@@ -515,7 +515,6 @@ jobs:
             }
             TBB_DIR="$(dirname "$tbb_config")"
             export TBB_DIR
-            unset LD_LIBRARY_PATH
           fi
           pnpm run "$BUILD_SCRIPT"
       - name: Upload the CUDA installer as a manual-update release asset
@@ -770,10 +769,41 @@ jobs:
             echo "No release artifacts were found for provenance."
             exit 1
           }
-      - name: Generate build provenance attestation
+      - name: Attest AppImage provenance
+        if: hashFiles('release-subjects/*.AppImage') != ''
         uses: actions/attest@v4
         with:
-          subject-path: release-subjects/*
+          subject-path: release-subjects/*.AppImage
+      - name: Attest Debian package provenance
+        if: hashFiles('release-subjects/*.deb') != ''
+        uses: actions/attest@v4
+        with:
+          subject-path: release-subjects/*.deb
+      - name: Attest RPM package provenance
+        if: hashFiles('release-subjects/*.rpm') != ''
+        uses: actions/attest@v4
+        with:
+          subject-path: release-subjects/*.rpm
+      - name: Attest NSIS installer provenance
+        if: hashFiles('release-subjects/*-setup.exe') != ''
+        uses: actions/attest@v4
+        with:
+          subject-path: release-subjects/*-setup.exe
+      - name: Attest MSI installer provenance
+        if: hashFiles('release-subjects/*.msi') != ''
+        uses: actions/attest@v4
+        with:
+          subject-path: release-subjects/*.msi
+      - name: Attest macOS DMG provenance
+        if: hashFiles('release-subjects/*.dmg') != ''
+        uses: actions/attest@v4
+        with:
+          subject-path: release-subjects/*.dmg
+      - name: Attest macOS archive provenance
+        if: hashFiles('release-subjects/*.app.tar.gz') != ''
+        uses: actions/attest@v4
+        with:
+          subject-path: release-subjects/*.app.tar.gz
 
   publish-release:
     needs: [release, release-sbom]
