@@ -80,7 +80,7 @@ jobs:
             runner: windows-latest
             cache_key: windows-x64
             build_script: build:ci:windows
-            bundle_root: D:\veskri-target
+            bundle_root: D:\v
           - name: Linux / Vulkan
             kind: standard
             runner: ubuntu-latest
@@ -180,7 +180,7 @@ jobs:
         run: |
           # whisper.cpp creates deeply nested shader-generator projects. Keep the
           # Cargo target path short so MSBuild's FileTracker stays below MAX_PATH.
-          'CARGO_TARGET_DIR=D:\\veskri-target' >> $env:GITHUB_ENV
+          'CARGO_TARGET_DIR=D:\v' >> $env:GITHUB_ENV
 
       - name: Configure Windows C/C++ headers for Local Whisper bindgen
         if: matrix.kind == 'standard' && runner.os == 'Windows'
@@ -194,11 +194,11 @@ jobs:
           $sdk = Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\Include' -Directory | Sort-Object Name -Descending | Select-Object -First 1
           if (-not $resource -or -not $msvc -or -not $sdk) { throw 'Required Windows C/C++ headers were not found.' }
           $includes = @(
-            "-isystem$resource\include",
-            "-isystem$($msvc.FullName)\include",
-            "-isystem$($sdk.FullName)\ucrt",
-            "-isystem$($sdk.FullName)\shared",
-            "-isystem$($sdk.FullName)\um"
+            "-isystem `"$resource\include`"",
+            "-isystem `"$($msvc.FullName)\include`"",
+            "-isystem `"$($sdk.FullName)\ucrt`"",
+            "-isystem `"$($sdk.FullName)\shared`"",
+            "-isystem `"$($sdk.FullName)\um`""
           ) -join ' '
           "BINDGEN_EXTRA_CLANG_ARGS_x86_64_pc_windows_msvc=$includes" >> $env:GITHUB_ENV
       - name: Install macOS local Whisper build dependencies
@@ -316,11 +316,11 @@ jobs:
           $sdk = Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\Include' -Directory | Sort-Object Name -Descending | Select-Object -First 1
           if (-not $resource -or -not $msvc -or -not $sdk) { throw 'Required Windows C/C++ headers were not found.' }
           $includes = @(
-            "-isystem$resource\include",
-            "-isystem$($msvc.FullName)\include",
-            "-isystem$($sdk.FullName)\ucrt",
-            "-isystem$($sdk.FullName)\shared",
-            "-isystem$($sdk.FullName)\um"
+            "-isystem `"$resource\include`"",
+            "-isystem `"$($msvc.FullName)\include`"",
+            "-isystem `"$($sdk.FullName)\ucrt`"",
+            "-isystem `"$($sdk.FullName)\shared`"",
+            "-isystem `"$($sdk.FullName)\um`""
           ) -join ' '
           "BINDGEN_EXTRA_CLANG_ARGS_x86_64_pc_windows_msvc=$includes" >> $env:GITHUB_ENV
       - name: Install CUDA and Linux Local Whisper build dependencies
@@ -403,11 +403,11 @@ jobs:
           $sdk = Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\Include' -Directory | Sort-Object Name -Descending | Select-Object -First 1
           if (-not $resource -or -not $msvc -or -not $sdk) { throw 'Required Windows C/C++ headers were not found.' }
           $includes = @(
-            "-isystem$resource\include",
-            "-isystem$($msvc.FullName)\include",
-            "-isystem$($sdk.FullName)\ucrt",
-            "-isystem$($sdk.FullName)\shared",
-            "-isystem$($sdk.FullName)\um"
+            "-isystem `"$resource\include`"",
+            "-isystem `"$($msvc.FullName)\include`"",
+            "-isystem `"$($sdk.FullName)\ucrt`"",
+            "-isystem `"$($sdk.FullName)\shared`"",
+            "-isystem `"$($sdk.FullName)\um`""
           ) -join ' '
           "BINDGEN_EXTRA_CLANG_ARGS_x86_64_pc_windows_msvc=$includes" >> $env:GITHUB_ENV
 

@@ -143,7 +143,7 @@ jobs:
           "VULKAN_SDK=$($vulkanSdk.FullName)" >> $env:GITHUB_ENV
           "$($vulkanSdk.FullName)\Bin" >> $env:GITHUB_PATH
           "LIBCLANG_PATH=C:\Program Files\LLVM\bin" >> $env:GITHUB_ENV
-          'CARGO_TARGET_DIR=D:\veskri-ci-vulkan-target' >> $env:GITHUB_ENV
+          'CARGO_TARGET_DIR=D:\v' >> $env:GITHUB_ENV
       - name: Install Windows CUDA build dependencies
         if: matrix.backend == 'cuda-windows'
         shell: pwsh
@@ -192,6 +192,7 @@ jobs:
           $environment = cmd /c "call `"$setvars`" intel64 >nul && set"
           foreach ($entry in $environment) {
             if ($entry -match '^PATH=(.*)$') {
+              $env:PATH = $Matches[1]
               $Matches[1] -split ';' | Where-Object { $_ } | Add-Content -Path $env:GITHUB_PATH
             } elseif ($entry -match '^(ONEAPI_ROOT|CMPLR_ROOT|DPCPP_ROOT|MKLROOT|DNNLROOT|INCLUDE|LIB|LIBPATH)=(.*)$') {
               $entry | Add-Content -Path $env:GITHUB_ENV
@@ -216,11 +217,11 @@ jobs:
           $sdk = Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\Include' -Directory | Sort-Object Name -Descending | Select-Object -First 1
           if (-not $resource -or -not $msvc -or -not $sdk) { throw 'Required Windows C/C++ headers were not found.' }
           $includes = @(
-            "-isystem$resource\include",
-            "-isystem$($msvc.FullName)\include",
-            "-isystem$($sdk.FullName)\ucrt",
-            "-isystem$($sdk.FullName)\shared",
-            "-isystem$($sdk.FullName)\um"
+            "-isystem `"$resource\include`"",
+            "-isystem `"$($msvc.FullName)\include`"",
+            "-isystem `"$($sdk.FullName)\ucrt`"",
+            "-isystem `"$($sdk.FullName)\shared`"",
+            "-isystem `"$($sdk.FullName)\um`""
           ) -join ' '
           "BINDGEN_EXTRA_CLANG_ARGS_x86_64_pc_windows_msvc=$includes" >> $env:GITHUB_ENV
       - name: Install Linux Intel oneAPI build dependencies
