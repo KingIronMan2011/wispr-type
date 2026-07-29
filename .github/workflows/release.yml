@@ -480,8 +480,199 @@ jobs:
           done
           gh release upload "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --clobber "${uploads[@]}"
 
+  release-intel-sycl:
+    needs: prepare-release
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        include:
+          - runner: windows-latest
+            target: windows
+            cache_key: windows-intel-sycl-x64
+          - runner: ubuntu-latest
+            target: linux
+            cache_key: linux-intel-sycl-x64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.release_tag || github.ref }}
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install Windows Intel oneAPI build dependencies
+        if: matrix.target == 'windows'
+        shell: pwsh
+        run: |
+          winget install --id Intel.OneAPI.Toolkit --exact --silent --accept-package-agreements --accept-source-agreements --source winget
+          winget install --id LLVM.LLVM --exact --silent --accept-package-agreements --accept-source-agreements --source winget
+          $oneapi = 'C:\Program Files (x86)\Intel\oneAPI'
+          $setvars = Join-Path $oneapi 'setvars.bat'
+          if (-not (Test-Path -LiteralPath $setvars)) { throw 'The Intel oneAPI Toolkit installation was not found.' }
+          "ONEAPI_SETVARS=$setvars" >> $env:GITHUB_ENV
+          "LIBCLANG_PATH=C:\Program Files\LLVM\bin" >> $env:GITHUB_ENV
+      - name: Configure Windows C/C++ headers for Local Whisper bindgen
+        if: matrix.target == 'windows'
+        shell: pwsh
+        run: |
+          $clang = 'C:\Program Files\LLVM\bin\clang.exe'
+          $resource = & $clang -print-resource-dir
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vs = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          $msvc = Get-ChildItem "$vs\VC\Tools\MSVC" -Directory | Sort-Object Name -Descending | Select-Object -First 1
+          $sdk = Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\Include' -Directory | Sort-Object Name -Descending | Select-Object -First 1
+          if (-not $resource -or -not $msvc -or -not $sdk) { throw 'Required Windows C/C++ headers were not found.' }
+          $includes = @(
+            "-isystem$resource\include",
+            "-isystem$($msvc.FullName)\include",
+            "-isystem$($sdk.FullName)\ucrt",
+            "-isystem$($sdk.FullName)\shared",
+            "-isystem$($sdk.FullName)\um"
+          ) -join ' '
+          "BINDGEN_EXTRA_CLANG_ARGS_x86_64_pc_windows_msvc=$includes" >> $env:GITHUB_ENV
+      - name: Install Linux Intel oneAPI build dependencies
+        if: matrix.target == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            file \
+            gnupg \
+            libasound2-dev \
+            libappindicator3-dev \
+            libclang-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libwebkit2gtk-4.1-dev \
+            libxdo-dev \
+            patchelf \
+            rpm \
+            wget
+          wget -qO- https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB \
+            | gpg --dearmor | sudo tee /usr/share/keyrings/oneapi-archive-keyring.gpg > /dev/null
+          echo "deb [signed-by=/usr/share/keyrings/oneapi-archive-keyring.gpg] https://apt.repos.intel.com/oneapi all main" \
+            | sudo tee /etc/apt/sources.list.d/oneAPI.list
+          sudo apt-get update
+          sudo apt-get install -y \
+            intel-oneapi-compiler-dpcpp-cpp-and-cpp-classic \
+            intel-oneapi-dnnl-devel \
+            intel-oneapi-mkl-devel
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "src-tauri -> target"
+          key: ${{ matrix.cache_key }}
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm metadata:check
+      - name: Verify updater signing secret
+        if: matrix.target == 'windows'
+        shell: pwsh
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY)) {
+            throw 'Missing required TAURI_SIGNING_PRIVATE_KEY repository secret.'
+          }
+      - name: Build the Intel SYCL Windows installer
+        if: matrix.target == 'windows'
+        shell: pwsh
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+        run: |
+          $environment = cmd /c "call `"$env:ONEAPI_SETVARS`" intel64 >nul && set"
+          foreach ($entry in $environment) {
+            if ($entry -match '^([^=]+)=(.*)$') {
+              [Environment]::SetEnvironmentVariable($Matches[1], $Matches[2], 'Process')
+            }
+          }
+          $env:CARGO_TARGET_DIR = 'D:\veskri-intel-sycl-target'
+          pnpm run build:ci:windows-intel
+      - name: Upload the Intel SYCL Windows installer as a manual-update release asset
+        if: matrix.target == 'windows'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
+        run: |
+          $installers = @(Get-ChildItem 'D:\veskri-intel-sycl-target\release\bundle\nsis' -Filter '*-setup.exe')
+          if ($installers.Count -ne 1) { throw 'Expected exactly one Intel SYCL NSIS installer.' }
+          $installer = $installers[0]
+          $intelName = $installer.Name -replace '-setup\.exe$', '-intel-sycl-setup.exe'
+          $intelInstaller = Join-Path $installer.DirectoryName $intelName
+          Copy-Item -LiteralPath $installer.FullName -Destination $intelInstaller
+          $signature = "$($installer.FullName).sig"
+          $intelSignature = "$intelInstaller.sig"
+          if (Test-Path -LiteralPath $signature) { Copy-Item -LiteralPath $signature -Destination $intelSignature }
+          $assets = @($intelInstaller)
+          if (Test-Path -LiteralPath $intelSignature) { $assets += $intelSignature }
+          gh release upload "$env:RELEASE_TAG" --repo "$env:GITHUB_REPOSITORY" --clobber $assets
+      - name: Verify updater signing secret
+        if: matrix.target == 'linux'
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          test -n "$TAURI_SIGNING_PRIVATE_KEY" || {
+            echo "Missing required TAURI_SIGNING_PRIVATE_KEY repository secret."
+            exit 1
+          }
+      - name: Build the Intel SYCL Linux packages
+        if: matrix.target == 'linux'
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+        run: |
+          source /opt/intel/oneapi/setvars.sh --force > /dev/null
+          pnpm run build:ci:linux-intel
+      - name: Import Linux release signing key
+        if: matrix.target == 'linux'
+        env:
+          LINUX_GPG_PRIVATE_KEY: ${{ secrets.LINUX_GPG_PRIVATE_KEY }}
+          LINUX_GPG_FINGERPRINT: BE00817976242ADAF028F67A39593B9B2D74D60A
+        run: |
+          export GNUPGHOME="$RUNNER_TEMP/veskri-intel-sycl-gnupg"
+          install -d -m 700 "$GNUPGHOME"
+          test -n "$LINUX_GPG_PRIVATE_KEY" || {
+            echo "Missing required LINUX_GPG_PRIVATE_KEY repository secret."
+            exit 1
+          }
+          printf '%s' "$LINUX_GPG_PRIVATE_KEY" | gpg --batch --import
+          gpg --batch --list-secret-keys --with-colons "$LINUX_GPG_FINGERPRINT" | grep -q '^sec:'
+          echo "GNUPGHOME=$GNUPGHOME" >> "$GITHUB_ENV"
+      - name: Sign and upload Intel SYCL Linux release artifacts
+        if: matrix.target == 'linux'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LINUX_GPG_PASSPHRASE: ${{ secrets.LINUX_GPG_PASSPHRASE }}
+          LINUX_GPG_FINGERPRINT: BE00817976242ADAF028F67A39593B9B2D74D60A
+          RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
+        run: |
+          trap 'gpgconf --kill gpg-agent || true; rm -rf "$GNUPGHOME"' EXIT
+          mapfile -d '' artifacts < <(find src-tauri/target/release/bundle -type f \( -name '*.AppImage' -o -name '*.deb' -o -name '*.rpm' \) -print0)
+          if [ "${#artifacts[@]}" -eq 0 ]; then
+            echo "No Intel SYCL Linux release artifacts were found."
+            exit 1
+          fi
+          uploads=()
+          for artifact in "${artifacts[@]}"; do
+            variant="${artifact%.*}-intel-sycl.${artifact##*.}"
+            cp "$artifact" "$variant"
+            gpg --batch --yes --pinentry-mode loopback \
+              --passphrase "$LINUX_GPG_PASSPHRASE" \
+              --local-user "$LINUX_GPG_FINGERPRINT" \
+              --armor --detach-sign \
+              --output "${variant}.asc" \
+              "$variant"
+            uploads+=("$variant" "${variant}.asc")
+          done
+          gh release upload "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --clobber "${uploads[@]}"
+
   publish-release:
-    needs: [release, release-cuda, release-rocm]
+    needs: [release, release-cuda, release-rocm, release-intel-sycl]
     runs-on: ubuntu-latest
     steps:
       - name: Publish the completed release

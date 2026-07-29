@@ -67,6 +67,12 @@ this backend Linux-only, so it is deliberately absent from Windows and macOS
 builds. ROCm hardware and distribution support is narrower than Vulkan; keep
 the regular Vulkan build as the fallback for unsupported AMD systems.
 
+For Intel GPUs on Windows and Linux, Veskri supports a dedicated SYCL/oneAPI
+build. It exposes **Intel GPU (SYCL/oneAPI)** in Settings and requires Intel's
+oneAPI DPC++ compiler, oneMKL, and an Intel GPU driver. It is a manual-update
+variant: use the normal Vulkan build when you want the broadest Intel GPU
+compatibility without the oneAPI runtime.
+
 ## Build requirements
 
 Local Whisper builds native `whisper.cpp` code. Alongside the normal Tauri
@@ -120,6 +126,23 @@ Verify the installation with `/opt/rocm/bin/hipconfig --full` before building.
 AMD's [ROCm Linux installation guide](https://rocm.docs.amd.com/projects/install-on-linux/en/latest/install/quick-start.html)
 and [hipBLAS installation guide](https://rocm.docs.amd.com/projects/hipBLAS/en/develop/install/Linux_Install_Guide.html)
 list the supported hardware, distributions, and packages.
+
+For an Intel SYCL/oneAPI build, install Intel oneAPI Toolkit, including the
+DPC++/C++ compiler and oneMKL. On Linux, activate oneAPI before building:
+
+```bash
+source /opt/intel/oneapi/setvars.sh
+pnpm run build:ci:linux-intel
+```
+
+On Windows, run the build from a shell initialized by oneAPI:
+
+```powershell
+cmd /c 'call "C:\Program Files (x86)\Intel\oneAPI\setvars.bat" intel64 && pnpm run build:ci:windows-intel'
+```
+
+Intel's [oneAPI installation guide](https://www.intel.com/content/www/us/en/docs/oneapi-toolkit/installation-guide-linux/latest/overview.html)
+lists the supported drivers, operating systems, and toolkit installation paths.
 
 For a native macOS Metal build, use Xcode Command Line Tools and run:
 

@@ -65,20 +65,33 @@ jobs:
             runner: ubuntu-latest
             feature: local-whisper-vulkan
             cache_key: ubuntu-vulkan
+            backend: vulkan
           - name: CUDA
             runner: windows-latest
             feature: local-whisper-cuda
             cache_key: windows-cuda
+            backend: cuda
           - name: Metal
             runner: macos-26
             feature: local-whisper-metal
             cache_key: macos-metal
+            backend: metal
+          - name: Intel SYCL (Linux)
+            runner: ubuntu-latest
+            feature: local-whisper-intel-sycl
+            cache_key: linux-intel-sycl
+            backend: intel-sycl-linux
+          - name: Intel SYCL (Windows)
+            runner: windows-latest
+            feature: local-whisper-intel-sycl
+            cache_key: windows-intel-sycl
+            backend: intel-sycl-windows
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - name: Install Linux Vulkan build dependencies
-        if: runner.os == 'Linux'
+        if: matrix.backend == 'vulkan'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -96,7 +109,7 @@ jobs:
             rpm \
             glslc
       - name: Install Windows CUDA build dependencies
-        if: runner.os == 'Windows'
+        if: matrix.backend == 'cuda'
         shell: pwsh
         run: |
           winget install --id Nvidia.CUDA --exact --silent --accept-package-agreements --accept-source-agreements --source winget
@@ -111,6 +124,24 @@ jobs:
           "$($cuda.FullName)\bin" >> $env:GITHUB_PATH
           "LIBCLANG_PATH=C:\Program Files\LLVM\bin" >> $env:GITHUB_ENV
           'CARGO_TARGET_DIR=D:\veskri-ci-cuda-target' >> $env:GITHUB_ENV
+      - name: Install Windows Intel oneAPI build dependencies
+        if: matrix.backend == 'intel-sycl-windows'
+        shell: pwsh
+        run: |
+          winget install --id Intel.OneAPI.Toolkit --exact --silent --accept-package-agreements --accept-source-agreements --source winget
+          winget install --id LLVM.LLVM --exact --silent --accept-package-agreements --accept-source-agreements --source winget
+          $oneapi = 'C:\Program Files (x86)\Intel\oneAPI'
+          $setvars = Join-Path $oneapi 'setvars.bat'
+          if (-not (Test-Path -LiteralPath $setvars)) { throw 'The Intel oneAPI Toolkit installation was not found.' }
+          $environment = cmd /c "call `"$setvars`" intel64 >nul && set"
+          foreach ($entry in $environment) {
+            if ($entry -match '^PATH=(.*)$') {
+              $Matches[1] -split ';' | Where-Object { $_ } | Add-Content -Path $env:GITHUB_PATH
+            } elseif ($entry -match '^(ONEAPI_ROOT|CMPLR_ROOT|DPCPP_ROOT|MKLROOT|DNNLROOT|INCLUDE|LIB|LIBPATH)=(.*)$') {
+              $entry | Add-Content -Path $env:GITHUB_ENV
+            }
+          }
+          'CARGO_TARGET_DIR=D:\veskri-ci-intel-target' >> $env:GITHUB_ENV
       - name: Configure Windows C/C++ headers for Local Whisper bindgen
         if: runner.os == 'Windows'
         shell: pwsh
@@ -130,6 +161,41 @@ jobs:
             "-isystem$($sdk.FullName)\um"
           ) -join ' '
           "BINDGEN_EXTRA_CLANG_ARGS_x86_64_pc_windows_msvc=$includes" >> $env:GITHUB_ENV
+      - name: Install Linux Intel oneAPI build dependencies
+        if: matrix.backend == 'intel-sycl-linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            file \
+            gpg \
+            libasound2-dev \
+            libappindicator3-dev \
+            libclang-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libwebkit2gtk-4.1-dev \
+            libxdo-dev \
+            patchelf \
+            rpm \
+            wget
+          wget -qO- https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB \
+            | gpg --dearmor | sudo tee /usr/share/keyrings/oneapi-archive-keyring.gpg > /dev/null
+          echo "deb [signed-by=/usr/share/keyrings/oneapi-archive-keyring.gpg] https://apt.repos.intel.com/oneapi all main" \
+            | sudo tee /etc/apt/sources.list.d/oneAPI.list
+          sudo apt-get update
+          sudo apt-get install -y \
+            intel-oneapi-compiler-dpcpp-cpp-and-cpp-classic \
+            intel-oneapi-dnnl-devel \
+            intel-oneapi-mkl-devel
+          source /opt/intel/oneapi/setvars.sh --force > /dev/null
+          for variable in ONEAPI_ROOT CMPLR_ROOT DPCPP_ROOT MKLROOT DNNLROOT CPATH LIBRARY_PATH LD_LIBRARY_PATH; do
+            value="${!variable:-}"
+            if [ -n "$value" ]; then
+              echo "$variable=$value" >> "$GITHUB_ENV"
+            fi
+          done
+          tr ':' '\n' <<< "$PATH" >> "$GITHUB_PATH"
       - name: Install macOS Metal build dependencies
         if: runner.os == 'macOS'
         run: |

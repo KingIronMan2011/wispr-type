@@ -1,6 +1,6 @@
 [package]
 name = "veskri"
-version = "1.4.1"
+version = "1.4.2"
 description = "Fast, private desktop dictation powered by Groq"
 authors = ["Veskri"]
 license = "MIT"
@@ -21,6 +21,7 @@ local-whisper-cuda = ["whisper-rs/cuda"]
 local-whisper-rocm = ["whisper-rs/hipblas"]
 local-whisper-vulkan = ["whisper-rs/vulkan"]
 local-whisper-metal = ["whisper-rs/metal"]
+local-whisper-intel-sycl = ["whisper-rs/intel-sycl"]
 
 [[bin]]
 name = "veskri"

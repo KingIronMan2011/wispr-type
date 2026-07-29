@@ -437,6 +437,14 @@ export default function SettingsContent({
                     ...(localWhisperCapabilities.metalAvailable
                       ? [{ value: "metal", label: "Metal GPU (Apple)" }]
                       : []),
+                    ...(localWhisperCapabilities.intelSyclAvailable
+                      ? [
+                          {
+                            value: "intel-sycl",
+                            label: "Intel GPU (SYCL/oneAPI)",
+                          },
+                        ]
+                      : []),
                   ]}
                 />
               </div>

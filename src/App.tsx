@@ -46,6 +46,7 @@ const fallbackLocalWhisperCapabilities: LocalWhisperCapabilities = {
   rocmAvailable: false,
   vulkanAvailable: false,
   metalAvailable: false,
+  intelSyclAvailable: false,
   availableMemoryMib: 0,
 };
 
@@ -122,7 +123,8 @@ export default function App() {
   const updateCheckInProgress = useRef(false);
   const usesManualGpuUpdates =
     localWhisperCapabilities.cudaAvailable ||
-    localWhisperCapabilities.rocmAvailable;
+    localWhisperCapabilities.rocmAvailable ||
+    localWhisperCapabilities.intelSyclAvailable;
 
   const installUpdatePackage = useCallback(
     async (update: Update, automatic = false) => {

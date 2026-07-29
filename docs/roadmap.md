@@ -4,7 +4,7 @@ This is the retained shortlist of product improvements discussed for Veskri.
 
 ## Next up
 
-- Validate and distribute optional Local Whisper GPU variants: CUDA for NVIDIA, HIPBLAS/ROCm for AMD, and Metal for macOS are available as source builds; add release-artifact strategy and hardware validation without bloating the default installer. Add Intel SYCL/oneAPI next. Keep CPU and Vulkan as portable fallbacks.
+- Validate Local Whisper GPU variants on real hardware and distribute the optional manual-update builds without bloating the default installer: CUDA for NVIDIA, HIPBLAS/ROCm for AMD, Intel SYCL/oneAPI for Intel GPUs, and Metal for macOS. Keep CPU and Vulkan as portable fallbacks.
 
 ## Distribution follow-up
 

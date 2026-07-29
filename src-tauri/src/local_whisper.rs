@@ -17,12 +17,16 @@ use whisper_rs::{
     all(feature = "local-whisper-cuda", feature = "local-whisper-rocm"),
     all(feature = "local-whisper-cuda", feature = "local-whisper-vulkan"),
     all(feature = "local-whisper-cuda", feature = "local-whisper-metal"),
+    all(feature = "local-whisper-cuda", feature = "local-whisper-intel-sycl"),
     all(feature = "local-whisper-rocm", feature = "local-whisper-vulkan"),
     all(feature = "local-whisper-rocm", feature = "local-whisper-metal"),
-    all(feature = "local-whisper-vulkan", feature = "local-whisper-metal")
+    all(feature = "local-whisper-rocm", feature = "local-whisper-intel-sycl"),
+    all(feature = "local-whisper-vulkan", feature = "local-whisper-metal"),
+    all(feature = "local-whisper-vulkan", feature = "local-whisper-intel-sycl"),
+    all(feature = "local-whisper-metal", feature = "local-whisper-intel-sycl")
 ))]
 compile_error!(
-    "Local Whisper GPU builds must select one backend: local-whisper-cuda, local-whisper-rocm, local-whisper-vulkan, or local-whisper-metal."
+    "Local Whisper GPU builds must select one backend: local-whisper-cuda, local-whisper-rocm, local-whisper-vulkan, local-whisper-metal, or local-whisper-intel-sycl."
 );
 
 #[cfg(all(feature = "local-whisper-rocm", not(target_os = "linux")))]
@@ -36,6 +40,12 @@ compile_error!("The Local Whisper CUDA backend is supported only on Windows and 
 
 #[cfg(all(feature = "local-whisper-metal", not(target_os = "macos")))]
 compile_error!("The Local Whisper Metal backend is supported only on macOS.");
+
+#[cfg(all(
+    feature = "local-whisper-intel-sycl",
+    not(any(target_os = "linux", target_os = "windows"))
+))]
+compile_error!("The Local Whisper Intel SYCL backend is supported only on Windows and Linux.");
 
 #[derive(Clone, Copy)]
 struct LocalModelSpec {
@@ -147,6 +157,7 @@ pub(crate) struct LocalWhisperCapabilities {
     rocm_available: bool,
     vulkan_available: bool,
     metal_available: bool,
+    intel_sycl_available: bool,
     available_memory_mib: u64,
 }
 
@@ -203,6 +214,7 @@ pub(crate) fn capabilities() -> LocalWhisperCapabilities {
         rocm_available: cfg!(feature = "local-whisper-rocm"),
         vulkan_available: cfg!(feature = "local-whisper-vulkan"),
         metal_available: cfg!(feature = "local-whisper-metal"),
+        intel_sycl_available: cfg!(feature = "local-whisper-intel-sycl"),
         available_memory_mib: available_memory_mib(),
     }
 }
@@ -341,11 +353,13 @@ fn should_use_gpu(settings: &AppSettings) -> bool {
         "rocm" => cfg!(feature = "local-whisper-rocm"),
         "vulkan" => cfg!(feature = "local-whisper-vulkan"),
         "metal" => cfg!(feature = "local-whisper-metal"),
+        "intel-sycl" => cfg!(feature = "local-whisper-intel-sycl"),
         "auto" => {
             cfg!(feature = "local-whisper-cuda")
                 || cfg!(feature = "local-whisper-rocm")
                 || cfg!(feature = "local-whisper-vulkan")
                 || cfg!(feature = "local-whisper-metal")
+                || cfg!(feature = "local-whisper-intel-sycl")
         }
         _ => false,
     }
@@ -533,6 +547,10 @@ mod tests {
             capabilities().metal_available,
             cfg!(feature = "local-whisper-metal")
         );
+        assert_eq!(
+            capabilities().intel_sycl_available,
+            cfg!(feature = "local-whisper-intel-sycl")
+        );
     }
 
     #[test]
@@ -548,6 +566,7 @@ mod tests {
                 || cfg!(feature = "local-whisper-rocm")
                 || cfg!(feature = "local-whisper-vulkan")
                 || cfg!(feature = "local-whisper-metal")
+                || cfg!(feature = "local-whisper-intel-sycl")
         );
 
         settings.local_whisper_acceleration = "cuda".into();
@@ -572,6 +591,12 @@ mod tests {
         assert_eq!(
             should_use_gpu(&settings),
             cfg!(feature = "local-whisper-metal")
+        );
+
+        settings.local_whisper_acceleration = "intel-sycl".into();
+        assert_eq!(
+            should_use_gpu(&settings),
+            cfg!(feature = "local-whisper-intel-sycl")
         );
     }
 

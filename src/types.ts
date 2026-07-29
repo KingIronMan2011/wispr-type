@@ -21,7 +21,7 @@ export type Settings = {
   localWhisperModel:
     "tiny" | "base" | "small" | "medium" | "large-v3-turbo" | "large-v3";
   localWhisperAcceleration:
-    "auto" | "cpu" | "cuda" | "rocm" | "vulkan" | "metal";
+    "auto" | "cpu" | "cuda" | "rocm" | "vulkan" | "metal" | "intel-sycl";
   discordPushToMuteEnabled: boolean;
 };
 
@@ -79,6 +79,7 @@ export type LocalWhisperCapabilities = {
   rocmAvailable: boolean;
   vulkanAvailable: boolean;
   metalAvailable: boolean;
+  intelSyclAvailable: boolean;
   availableMemoryMib: number;
 };
 

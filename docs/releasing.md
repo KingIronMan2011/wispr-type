@@ -39,11 +39,11 @@ cargo check --manifest-path src-tauri/Cargo.toml --features local-whisper-vulkan
 
 The regular Windows/Linux release artifacts deliberately use Vulkan rather than
 CUDA so one build remains portable across compatible NVIDIA, AMD, and Intel
-GPUs. The regular macOS artifacts use Metal. Every release also includes a
-separately named Windows CUDA installer and Linux ROCm packages for users of
-those native backends. Those provider-specific assets are manual-update variants
-and are intentionally excluded from the in-app updater feed. To build the CUDA
-variant locally, install the NVIDIA CUDA Toolkit and run:
+GPUs. The regular macOS artifacts use Metal. Every release also includes
+separately named CUDA, ROCm, and Intel SYCL assets for users of those native
+backends. Those provider-specific assets are manual-update variants and are
+intentionally excluded from the in-app updater feed. To build the CUDA variant
+locally, install the NVIDIA CUDA Toolkit and run:
 
 ```powershell
 pnpm tauri build -- --features local-whisper-cuda
@@ -54,6 +54,20 @@ feed. Install ROCm with HIP and hipBLAS, then build it from a Linux environment:
 
 ```bash
 pnpm tauri build -- --features local-whisper-rocm
+```
+
+Intel SYCL/oneAPI builds are likewise separately named manual-update assets for
+Windows and Linux. They require the Intel oneAPI DPC++ compiler, oneMKL, and a
+compatible Intel GPU driver; users should keep the normal Vulkan build if they
+do not need the oneAPI runtime. Build them with:
+
+```powershell
+cmd /c 'call "C:\Program Files (x86)\Intel\oneAPI\setvars.bat" intel64 && pnpm run build:ci:windows-intel'
+```
+
+```bash
+source /opt/intel/oneapi/setvars.sh
+pnpm run build:ci:linux-intel
 ```
 
 The release job also verifies `TAURI_SIGNING_PRIVATE_KEY` before building. A
@@ -112,7 +126,7 @@ Download the artifact, its matching `.asc` file, and the committed public key. T
 ```bash
 gpg --import docs/keys/veskri-linux-release-signing.asc
 gpg --fingerprint BE00817976242ADAF028F67A39593B9B2D74D60A
-gpg --verify Veskri_1.4.1_amd64.deb.asc Veskri_1.4.1_amd64.deb
+gpg --verify Veskri_1.4.2_amd64.deb.asc Veskri_1.4.2_amd64.deb
 ```
 
 Replace the example filename with the downloaded AppImage, Debian, or RPM artifact. A good signature is only trustworthy when its fingerprint matches the value above.
