@@ -203,12 +203,14 @@ jobs:
             intel-oneapi-dnnl-devel \
             intel-oneapi-mkl-devel
           source /opt/intel/oneapi/setvars.sh --force > /dev/null
-          for variable in ONEAPI_ROOT CMPLR_ROOT DPCPP_ROOT MKLROOT DNNLROOT CPATH LIBRARY_PATH LD_LIBRARY_PATH; do
-            value="${!variable:-}"
-            if [ -n "$value" ]; then
-              echo "$variable=$value" >> "$GITHUB_ENV"
-            fi
-          done
+          {
+            for variable in ONEAPI_ROOT CMPLR_ROOT DPCPP_ROOT MKLROOT DNNLROOT CPATH LIBRARY_PATH LD_LIBRARY_PATH; do
+              value="${!variable:-}"
+              if [ -n "$value" ]; then
+                echo "$variable=$value"
+              fi
+            done
+          } >> "$GITHUB_ENV"
           tr ':' '\n' <<< "$PATH" >> "$GITHUB_PATH"
       - name: Install macOS Metal build dependencies
         if: runner.os == 'macOS'
