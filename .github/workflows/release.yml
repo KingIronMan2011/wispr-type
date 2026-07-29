@@ -204,6 +204,7 @@ jobs:
       - name: Install macOS local Whisper build dependencies
         if: matrix.kind == 'standard' && runner.os == 'macOS'
         run: |
+          brew untap aws/tap || true
           brew install llvm
           {
             echo "LIBCLANG_PATH=$(brew --prefix llvm)/lib"
@@ -435,10 +436,10 @@ jobs:
             | sudo tee /etc/apt/sources.list.d/oneAPI.list
           sudo apt-get update
           sudo apt-get install -y \
-            intel-oneapi-compiler-dpcpp-cpp-and-cpp-classic \
-            intel-oneapi-dpcpp-ct \
-            intel-oneapi-dnnl-devel \
-            intel-oneapi-mkl-devel
+            intel-oneapi-compiler-dpcpp-cpp=2025.3.3-30 \
+            intel-oneapi-dpcpp-ct=2025.3.1-18 \
+            intel-oneapi-dnnl-devel=2025.3.0-409 \
+            intel-oneapi-mkl-devel=2025.3.1-8
       - name: Build the Windows GPU installer
         if: matrix.kind == 'gpu' && matrix.target == 'windows'
         shell: pwsh
@@ -459,9 +460,12 @@ jobs:
               }
             }
             $env:CMAKE_GENERATOR = 'Ninja'
-            $env:CC = (Get-Command icx.exe -ErrorAction Stop).Source
-            $env:CXX = (Get-Command icpx.exe -ErrorAction Stop).Source
+            Get-Command icx.exe -ErrorAction Stop | Out-Null
+            Get-Command icpx.exe -ErrorAction Stop | Out-Null
             Get-Command ninja.exe -ErrorAction Stop | Out-Null
+            $env:CMAKE_C_FLAGS = ''
+            $env:CMAKE_CXX_FLAGS = ''
+            $env:CMAKE_ASM_FLAGS = ''
             $env:CARGO_TARGET_DIR = 'D:\veskri-intel-sycl-target'
           }
           pnpm run $env:BUILD_SCRIPT

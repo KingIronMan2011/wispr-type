@@ -2,6 +2,7 @@ name: CI
 
 on:
   pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
   push:
     branches: [main]
 
@@ -15,6 +16,7 @@ concurrency:
 jobs:
   workflow-lint:
     name: GitHub Actions workflow lint
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -29,6 +31,7 @@ jobs:
 
   quality:
     name: Quality checks
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -71,6 +74,7 @@ jobs:
 
   local-whisper-backends:
     name: Local Whisper (${{ matrix.name }})
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     strategy:
       fail-fast: false
       matrix:
@@ -198,12 +202,13 @@ jobs:
               $entry | Add-Content -Path $env:GITHUB_ENV
             }
           }
-          $icx = (Get-Command icx.exe -ErrorAction Stop).Source
-          $icpx = (Get-Command icpx.exe -ErrorAction Stop).Source
+          Get-Command icx.exe -ErrorAction Stop | Out-Null
+          Get-Command icpx.exe -ErrorAction Stop | Out-Null
           Get-Command ninja.exe -ErrorAction Stop | Out-Null
           'CMAKE_GENERATOR=Ninja' >> $env:GITHUB_ENV
-          "CC=$icx" >> $env:GITHUB_ENV
-          "CXX=$icpx" >> $env:GITHUB_ENV
+          'CMAKE_C_FLAGS=' >> $env:GITHUB_ENV
+          'CMAKE_CXX_FLAGS=' >> $env:GITHUB_ENV
+          'CMAKE_ASM_FLAGS=' >> $env:GITHUB_ENV
           'CARGO_TARGET_DIR=D:\veskri-ci-intel-target' >> $env:GITHUB_ENV
       - name: Configure Windows C/C++ headers for Local Whisper bindgen
         if: runner.os == 'Windows'
@@ -248,10 +253,10 @@ jobs:
             | sudo tee /etc/apt/sources.list.d/oneAPI.list
           sudo apt-get update
           sudo apt-get install -y \
-            intel-oneapi-compiler-dpcpp-cpp-and-cpp-classic \
-            intel-oneapi-dpcpp-ct \
-            intel-oneapi-dnnl-devel \
-            intel-oneapi-mkl-devel
+            intel-oneapi-compiler-dpcpp-cpp=2025.3.3-30 \
+            intel-oneapi-dpcpp-ct=2025.3.1-18 \
+            intel-oneapi-dnnl-devel=2025.3.0-409 \
+            intel-oneapi-mkl-devel=2025.3.1-8
           source /opt/intel/oneapi/setvars.sh --force > /dev/null
           syclcompat_header="$(find /opt/intel/oneapi -path '*/include/syclcompat/math.hpp' -print -quit)"
           test -n "$syclcompat_header" || {
@@ -272,6 +277,7 @@ jobs:
       - name: Install macOS Metal build dependencies
         if: runner.os == 'macOS'
         run: |
+          brew untap aws/tap || true
           brew install llvm
           {
             echo "LIBCLANG_PATH=$(brew --prefix llvm)/lib"
