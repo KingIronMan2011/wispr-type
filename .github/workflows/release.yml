@@ -516,16 +516,26 @@ jobs:
             TBB_DIR="$(dirname "$tbb_config")"
             export TBB_DIR
             cargo build --release --manifest-path src-tauri/Cargo.toml --features local-whisper-intel-sycl
-            whisper_runtime_library_path="$(
+            whisper_runtime_libraries="$(
               find src-tauri/target/release/build -type f \
-                \( -name 'libwhisper.so*' -o -name 'libggml*.so*' \) \
-                -printf '%h\n' | sort -u | paste -sd ':' -
+                \( -name 'libwhisper.so*' -o -name 'libggml*.so*' \) -print0 |
+                while IFS= read -r -d '' library; do
+                  library="$(realpath "$library")"
+                  soname="$(readelf -d "$library" | awk -F '[][]' '/SONAME/ { print $2; exit }')"
+                  test -n "$soname" && printf '%s\t%s\n' "$soname" "$library"
+                done
             )"
-            test -n "$whisper_runtime_library_path" || {
+            test -n "$whisper_runtime_libraries" || {
               echo "The Intel SYCL Whisper runtime libraries were not found."
               exit 1
             }
-            export LD_LIBRARY_PATH="$whisper_runtime_library_path${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+            TAURI_CONFIG_FILE="$RUNNER_TEMP/veskri-intel-sycl-tauri.conf.json"
+            appimage_files='{}'
+            while IFS=$'\t' read -r soname library; do
+              appimage_files="$(jq --arg destination "usr/lib/$soname" --arg source "$library" '. + { ($destination): $source }' <<< "$appimage_files")"
+            done <<< "$whisper_runtime_libraries"
+            jq -n --argjson files "$appimage_files" '{ bundle: { linux: { appimage: { files: $files } } } }' > "$TAURI_CONFIG_FILE"
+            export TAURI_CONFIG_FILE
           fi
           pnpm run "$BUILD_SCRIPT"
       - name: Upload the CUDA installer as a manual-update release asset
