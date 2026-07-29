@@ -532,9 +532,21 @@ jobs:
             TAURI_CONFIG_FILE="$RUNNER_TEMP/veskri-intel-sycl-tauri.conf.json"
             appimage_files='{}'
             while IFS=$'\t' read -r soname library; do
-              appimage_files="$(jq --arg destination "usr/lib/$soname" --arg source "$library" '. + { ($destination): $source }' <<< "$appimage_files")"
+              appimage_files="$(jq --arg destination "/usr/lib/$soname" --arg source "$library" '. + { ($destination): $source }' <<< "$appimage_files")"
             done <<< "$whisper_runtime_libraries"
-            jq -n --argjson files "$appimage_files" '{ bundle: { linux: { appimage: { files: $files } } } }' > "$TAURI_CONFIG_FILE"
+            jq -n \
+              --arg binary "$GITHUB_WORKSPACE/src-tauri/target/release/veskri" \
+              --arg rpath '$ORIGIN/../lib' \
+              --argjson files "$appimage_files" \
+              '{
+                build: {
+                  beforeBundleCommand: (
+                    "patchelf --set-rpath " + ($rpath | @sh) + " " + ($binary | @sh)
+                  )
+                },
+                bundle: { linux: { appimage: { files: $files } } }
+              }' > "$TAURI_CONFIG_FILE"
+            jq -e '.bundle.linux.appimage.files["/usr/lib/libwhisper.so.1"]' "$TAURI_CONFIG_FILE" > /dev/null
             export TAURI_CONFIG_FILE
           fi
           pnpm run "$BUILD_SCRIPT"
