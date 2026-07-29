@@ -515,6 +515,17 @@ jobs:
             }
             TBB_DIR="$(dirname "$tbb_config")"
             export TBB_DIR
+            cargo build --release --manifest-path src-tauri/Cargo.toml --features local-whisper-intel-sycl
+            whisper_runtime_library_path="$(
+              find src-tauri/target/release/build -type f \
+                \( -name 'libwhisper.so*' -o -name 'libggml*.so*' \) \
+                -printf '%h\n' | sort -u | paste -sd ':' -
+            )"
+            test -n "$whisper_runtime_library_path" || {
+              echo "The Intel SYCL Whisper runtime libraries were not found."
+              exit 1
+            }
+            export LD_LIBRARY_PATH="$whisper_runtime_library_path${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
           fi
           pnpm run "$BUILD_SCRIPT"
       - name: Upload the CUDA installer as a manual-update release asset
