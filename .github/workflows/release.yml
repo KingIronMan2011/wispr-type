@@ -464,7 +464,12 @@ jobs:
             Get-Command icx.exe -ErrorAction Stop | Out-Null
             Get-Command icpx.exe -ErrorAction Stop | Out-Null
             Get-Command ninja.exe -ErrorAction Stop | Out-Null
-            $env:CMAKE_CXX_COMPILER = 'icx'
+            $toolchain = Join-Path $env:RUNNER_TEMP 'veskri-intel-sycl-toolchain.cmake'
+            @'
+            set(CMAKE_C_COMPILER "icx" CACHE FILEPATH "" FORCE)
+            set(CMAKE_CXX_COMPILER "icx" CACHE FILEPATH "" FORCE)
+            '@ | Set-Content -LiteralPath $toolchain -NoNewline
+            $env:CMAKE_TOOLCHAIN_FILE = $toolchain
             $env:CMAKE_C_FLAGS = ''
             $env:CMAKE_CXX_FLAGS = ''
             $env:CMAKE_ASM_FLAGS = ''
@@ -492,6 +497,12 @@ jobs:
             }
             syclcompat_include="$(dirname "$(dirname "$syclcompat_header")")"
             export CPLUS_INCLUDE_PATH="$syclcompat_include${CPLUS_INCLUDE_PATH:+:$CPLUS_INCLUDE_PATH}"
+            tbb_config="$(find /opt/intel/oneapi/tbb -type f -name TBBConfig.cmake -print -quit)"
+            test -n "$tbb_config" || {
+              echo "The Intel oneAPI TBB CMake package was not found."
+              exit 1
+            }
+            export TBB_DIR="$(dirname "$tbb_config")"
           fi
           pnpm run "$BUILD_SCRIPT"
       - name: Upload the CUDA installer as a manual-update release asset
