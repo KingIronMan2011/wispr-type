@@ -128,7 +128,12 @@ async fn stop_native_recording(
     state: State<'_, AppState>,
     output_action: Option<String>,
 ) -> Result<Transcript, String> {
-    overlay::show(&app, "transcribing", "Turning speech into text…");
+    let overlay_message = if storage::load_settings(&state).ai_post_processing_enabled {
+        "Transcribing and polishing text…"
+    } else {
+        "Turning speech into text…"
+    };
+    overlay::show(&app, "transcribing", overlay_message);
     let result = audio::stop_native_recording(app.clone(), state.clone(), output_action).await;
     if let Err(error) = push_to_mute::restore_after_dictation(&state) {
         log::warn!("Couldn’t restore Discord mute state: {error}");
@@ -153,7 +158,12 @@ async fn retry_last_transcription(
     state: State<'_, AppState>,
     output_action: Option<String>,
 ) -> Result<Transcript, String> {
-    overlay::show(&app, "transcribing", "Retrying your dictation…");
+    let overlay_message = if storage::load_settings(&state).ai_post_processing_enabled {
+        "Retrying and polishing your dictation…"
+    } else {
+        "Retrying your dictation…"
+    };
+    overlay::show(&app, "transcribing", overlay_message);
     let result = audio::retry_last_transcription(app.clone(), state, output_action).await;
     match &result {
         Ok(_) => {

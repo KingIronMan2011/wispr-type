@@ -82,6 +82,12 @@ pub(crate) fn save_settings(
         .chars()
         .take(4_000)
         .collect();
+    settings.ai_post_processing_instructions = settings
+        .ai_post_processing_instructions
+        .trim()
+        .chars()
+        .take(1_500)
+        .collect();
     settings.deferred_update_version = settings
         .deferred_update_version
         .trim()

@@ -513,7 +513,11 @@ export default function App() {
 
   const startRecording = useCallback(async () => {
     if (recordingRef.current || transcribing || isCheckingMicrophone) return;
-    if (settingsRef.current.transcriptionProvider === "groq" && !hasApiKey) {
+    if (
+      (settingsRef.current.transcriptionProvider === "groq" ||
+        settingsRef.current.aiPostProcessingEnabled) &&
+      !hasApiKey
+    ) {
       setMessage("Add your Groq API key before dictating");
       return;
     }

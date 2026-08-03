@@ -15,6 +15,8 @@ export type Settings = {
   textMode: "literal" | "polished";
   personalVocabulary: string;
   dictionaryReplacements: string;
+  aiPostProcessingEnabled: boolean;
+  aiPostProcessingInstructions: string;
   autoInstallUpdates: boolean;
   deferredUpdateVersion: string;
   transcriptionProvider: "groq" | "local";
@@ -105,6 +107,8 @@ export const fallbackSettings: Settings = {
   textMode: "literal",
   personalVocabulary: "",
   dictionaryReplacements: "",
+  aiPostProcessingEnabled: false,
+  aiPostProcessingInstructions: "",
   autoInstallUpdates: false,
   deferredUpdateVersion: "",
   transcriptionProvider: "groq",

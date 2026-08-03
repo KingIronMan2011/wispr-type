@@ -24,6 +24,7 @@ The app runs quietly in the system tray, works from any application, and keeps t
 - Copy-only or immediate auto-paste output
 - Optional voice commands in English and German, such as “new paragraph”, “comma”, “neuer Absatz”, and “Punkt”
 - Literal and polished text modes
+- Optional AI text polish through Groq’s GPT-OSS 20B for punctuation, casing, spacing, and light grammar corrections
 - Personal dictionary for names, product terms, and preferred spellings
 - Local transcript history with pinning, editing, search, and configurable retention
 - Secure Groq API-key storage through Windows Credential Manager
@@ -74,6 +75,7 @@ Veskri is designed to make its local data handling clear:
 - If transcription fails, the recording is retained **only in memory** to make retrying possible. It is cleared after success or when the app exits.
 - Transcript history is stored locally in SQLite and can be disabled or cleared from Settings.
 - Audio is sent to Groq when you transcribe. Groq’s retention and processing terms are governed by your Groq project and account; see [Groq’s data documentation](https://console.groq.com/docs/your-data).
+- When AI text polish is enabled, the completed transcript text (not audio) is sent to Groq’s GPT-OSS 20B model for the selected corrections. You can keep this feature off for fully local Local Whisper processing.
 - Local Whisper performs transcription on the device. Downloaded models are SHA-256 checked before use and no dictation audio is uploaded while this provider is selected.
 - Discord push-to-mute uses a local simulated keypress for Discord Desktop only. It does not require, collect, or store a Discord client secret, account token, call audio, or message data.
 

@@ -6,6 +6,8 @@ describe("settings defaults", () => {
     expect(fallbackSettings.completedOnboarding).toBe(false);
     expect(fallbackSettings.notificationsEnabled).toBe(true);
     expect(fallbackSettings.dictionaryReplacements).toBe("");
+    expect(fallbackSettings.aiPostProcessingEnabled).toBe(false);
+    expect(fallbackSettings.aiPostProcessingInstructions).toBe("");
     expect(fallbackSettings.autoInstallUpdates).toBe(false);
     expect(fallbackSettings.deferredUpdateVersion).toBe("");
   });

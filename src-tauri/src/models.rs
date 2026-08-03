@@ -36,6 +36,10 @@ pub(crate) struct AppSettings {
     #[serde(default)]
     pub(crate) dictionary_replacements: String,
     #[serde(default)]
+    pub(crate) ai_post_processing_enabled: bool,
+    #[serde(default)]
+    pub(crate) ai_post_processing_instructions: String,
+    #[serde(default)]
     pub(crate) auto_install_updates: bool,
     #[serde(default)]
     pub(crate) deferred_update_version: String,
@@ -87,6 +91,8 @@ impl Default for AppSettings {
             text_mode: "literal".into(),
             personal_vocabulary: String::new(),
             dictionary_replacements: String::new(),
+            ai_post_processing_enabled: false,
+            ai_post_processing_instructions: String::new(),
             auto_install_updates: false,
             deferred_update_version: String::new(),
             transcription_provider: default_transcription_provider(),

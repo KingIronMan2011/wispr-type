@@ -635,6 +635,66 @@ export default function SettingsContent({
               </button>
             </div>
           </div>
+          <div className="setting-row ai-polish-row">
+            <div>
+              <strong>
+                AI text polish{" "}
+                <span className="ai-model-badge">GPT-OSS 20B</span>
+              </strong>
+              <p>
+                Use Groq to fix punctuation, capitalization, spacing, and light
+                grammar after transcription.
+              </p>
+              <p className="ai-polish-disclosure">
+                Only the transcript text is sent to Groq; audio stays with your
+                selected transcription provider.
+              </p>
+            </div>
+            <span
+              title={
+                hasApiKey
+                  ? undefined
+                  : "Add a Groq API key before enabling AI text polish"
+              }
+            >
+              <Toggle
+                checked={settings.aiPostProcessingEnabled}
+                disabled={!hasApiKey}
+                label="Enable AI text polish"
+                onChange={(aiPostProcessingEnabled) =>
+                  persist({ ...settings, aiPostProcessingEnabled })
+                }
+              />
+            </span>
+          </div>
+          {settings.aiPostProcessingEnabled && (
+            <div className="ai-polish-instructions">
+              <div>
+                <strong>Additional instructions</strong>
+                <p>
+                  Optional preferences, such as “use German quotation marks” or
+                  “keep technical terms in English”. The transcript’s meaning is
+                  always preserved.
+                </p>
+              </div>
+              <textarea
+                key={settings.aiPostProcessingInstructions}
+                className="ai-polish-input"
+                defaultValue={settings.aiPostProcessingInstructions}
+                maxLength={1_500}
+                placeholder="e.g. Use British English spelling."
+                aria-label="AI text-polish instructions"
+                onBlur={(event) => {
+                  const aiPostProcessingInstructions = event.target.value;
+                  if (
+                    aiPostProcessingInstructions !==
+                    settings.aiPostProcessingInstructions
+                  )
+                    persist({ ...settings, aiPostProcessingInstructions });
+                }}
+              />
+            </div>
+          )}
           <div className="vocabulary-row">
             <div>
               <strong>Personal dictionary</strong>
@@ -1063,6 +1123,13 @@ export default function SettingsContent({
                 ? "Local Whisper keeps dictation audio on this device. Veskri deletes temporary audio files after processing."
                 : "Dictation audio is sent to Groq only to create a transcript. Veskri deletes temporary audio files after processing."}
             </span>
+            {settings.aiPostProcessingEnabled && (
+              <span>
+                AI text polish sends the finished transcript text to Groq’s
+                GPT-OSS 20B model. It does not send your recording a second
+                time.
+              </span>
+            )}
             <span>
               Transcript history stays in a local SQLite database; your API key
               stays in secure operating-system storage.
