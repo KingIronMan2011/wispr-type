@@ -135,7 +135,7 @@ Download the artifact, its matching `.asc` file, and the committed public key. T
 ```bash
 gpg --import docs/keys/veskri-linux-release-signing.asc
 gpg --fingerprint BE00817976242ADAF028F67A39593B9B2D74D60A
-gpg --verify Veskri_1.4.2_amd64.deb.asc Veskri_1.4.2_amd64.deb
+gpg --verify Veskri_1.5.0_amd64.deb.asc Veskri_1.5.0_amd64.deb
 ```
 
 Replace the example filename with the downloaded AppImage, Debian, or RPM artifact. A good signature is only trustworthy when its fingerprint matches the value above.
