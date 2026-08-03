@@ -34,7 +34,7 @@
     "build:ci:linux": "tauri build --bundles appimage,deb,rpm --features local-whisper-vulkan",
     "build:ci:linux-cuda": "tauri build --bundles appimage,deb,rpm --features local-whisper-cuda",
     "build:ci:linux-rocm": "tauri build --bundles appimage,deb,rpm --features local-whisper-rocm",
-    "build:ci:linux-intel": "tauri build --config \"$TAURI_CONFIG_FILE\" --verbose --bundles appimage,deb,rpm --features local-whisper-intel-sycl",
+    "build:ci:linux-intel": "tauri build --bundles appimage,deb,rpm --features local-whisper-intel-sycl",
     "build:ci:mac": "tauri build --bundles app,dmg --no-sign --features local-whisper-metal",
     "build:ci:windows": "tauri build --features local-whisper-vulkan",
     "build:ci:windows-cuda": "tauri build --features local-whisper-cuda",
